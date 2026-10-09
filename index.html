@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#FFF5E8">
+  <meta name="description" content="ごはんをいっしょに食べる、見守りキャラクター「もぐとも」。カメラで顔を追い、ぱくっと食べたら応援するアプリ。">
+  <title>もぐとも | いっしょに ぱくっ！</title>
+  <style>
+    :root { --ink:#49392F; --muted:#927C6D; --peach:#FF997C; --coral:#FA775D; --cream:#FFF5E8; --pink:#FFD5C8; --soft:#FFFEF9; --outline:#EBD7C7; }
+    * {box-sizing:border-box}
+    html { background:var(--cream); min-height:100%; }
+    body { margin:0; color:var(--ink); font-family:ui-rounded,"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+    button { font:inherit; cursor:pointer; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
+    button:focus-visible { outline:4px solid #5795ED; outline-offset:3px; }
+    .app { width:min(100%,500px); margin:0 auto; min-height:100svh; padding:16px 20px max(22px,env(safe-area-inset-bottom)); position:relative; overflow:hidden; isolation:isolate; }
+    .app:before { content:""; position:absolute; width:300px;height:300px;border-radius:50%;background:#FFE8D4;top:-140px;right:-160px;z-index:-1; }
+    .topbar {display:flex;align-items:center;justify-content:space-between;position:relative;z-index:2;gap:12px}
+    .brand {display:flex;align-items:center;gap:9px;font-weight:900;font-size:22px;letter-spacing:.03em}
+    .logo {width:36px;height:36px;display:grid;place-items:center;background:#FFDD98;border:2px solid #F5C778;border-radius:12px;font-size:21px;transform:rotate(-8deg)}
+    .icon-button {width:44px;height:44px;display:grid;place-items:center;border-radius:50%;border:1.5px solid #EEDCCC;background:#FFF9F0;color:var(--ink);font-size:23px;box-shadow:0 3px 0 #F1E2D0}
+    .icon-button[aria-pressed="false"] {opacity:.6}
+    .intro {text-align:center;margin:14px auto 0;}
+    .eyebrow {color:#D27D64;font-size:12px;font-weight:900;letter-spacing:.12em;margin:0 0 3px;}
+    h1 {font-size:clamp(25px,7vw,33px);letter-spacing:.02em;line-height:1.35;margin:0;font-weight:900}
+    h1 .pink {color:#F07769}
+    .subhead {font-size:13px;font-weight:700;color:var(--muted);margin:7px 0 0}
+    .bubble {position:relative;z-index:2;max-width:340px;min-height:66px;margin:20px auto -4px;padding:15px 20px;background:white;border:2px solid #F1D8C8;border-radius:23px;box-shadow:0 6px 0 #F5E2D4;display:flex;align-items:center;justify-content:center;text-align:center;}
+    .bubble:after {content:"";position:absolute;width:17px;height:17px;bottom:-10px;left:calc(50% - 9px);background:white;transform:rotate(45deg);border-right:2px solid #F1D8C8;border-bottom:2px solid #F1D8C8;}
+    #saying {font-size:clamp(18px,5.1vw,22px);font-weight:900;line-height:1.35;margin:0;transition:opacity .2s}
+    .stage {height:clamp(260px,38svh,355px);position:relative;display:flex;align-items:center;justify-content:center;margin:0 -20px;}
+    .stage:before {content:"";position:absolute;left:6%;right:6%;height:64%;top:17%;border-radius:50%;background:#FFE8C9;filter:blur(2px);z-index:-1;}
+    .decor {position:absolute;font-weight:900;color:#F9BE88;user-select:none;pointer-events:none}
+    .decor.one {top:13%;left:7%;font-size:27px;transform:rotate(-20deg)}
+    .decor.two {top:23%;right:9%;font-size:32px;color:#FBA7AD}
+    .decor.three {bottom:27%;left:9%;font-size:21px;color:#EFBA82}
+    .buddy {width:min(68vw,272px);height:min(68vw,272px);position:relative;transform:translateY(-2px);filter:drop-shadow(0 11px 0 rgba(195,125,91,.12));animation:breathe 3.4s ease-in-out infinite}
+    @keyframes breathe {0%,100%{transform:translateY(3px) rotate(-1deg)}50%{transform:translateY(-6px) rotate(1deg)}}
+    .ear {position:absolute;top:-7%;width:31%;height:44%;background:#FFB0A1;border:4px solid #D98272;border-radius:54% 54% 42% 42%;z-index:0}
+    .ear:before {content:"";position:absolute;inset:18% 22% 23%;background:#FFDBCF;border-radius:inherit}
+    .ear.left {left:7%;transform:rotate(-26deg)}.ear.right {right:7%;transform:rotate(26deg)}
+    .body {position:absolute;inset:9% 0 0;background:linear-gradient(150deg,#FFB8A6,#FF9287 80%);border:4px solid #D98272;border-radius:47% 47% 43% 43%;z-index:1;box-shadow:inset 13px -15px 0 rgba(235,97,87,.11),inset -14px 10px 0 rgba(255,255,255,.22)}
+    .belly {position:absolute;left:22%;width:56%;height:35%;top:56%;background:#FFEEE2;border-radius:45%;z-index:1;opacity:.9}
+    .eye {position:absolute;z-index:4;top:35%;width:17%;height:22%;background:#442F31;border-radius:48%;overflow:hidden;}
+    .eye.left {left:25%}.eye.right {right:25%}
+    .eye .shine {position:absolute;top:16%;left:22%;width:30%;height:24%;border-radius:50%;background:white}
+    .eye .dot {position:absolute;bottom:19%;right:19%;width:13%;height:11%;border-radius:50%;background:#9C7D80}
+    .eye-inner {position:absolute;inset:0;transform:translate(var(--look-x,0px),var(--look-y,0px));transition:transform .15s ease-out}
+    .eye .eyelid {position:absolute;inset:-1px;background:#FFAF9D;border-radius:0 0 50% 50%;height:0;z-index:2;animation:blink 5.7s infinite}
+    @keyframes blink {0%,92%,96%,100%{height:0}94%{height:100%}}
+    .cheek {position:absolute;width:18%;height:9%;top:60%;background:#F56D6D;opacity:.48;border-radius:50%;z-index:3}
+    .cheek.left {left:12%}.cheek.right {right:12%}
+    .mouth {position:absolute;left:calc(50% - 18px);top:63%;width:36px;height:17px;border-bottom:5px solid #8D424A;border-radius:0 0 45px 45px;z-index:4;transition:all .2s}
+    .buddy.is-munching .mouth {top:61%;left:calc(50% - 15px);width:30px;height:29px;background:#973B52;border:3px solid #8D424A;border-radius:50%;animation:chew .28s ease-in-out 4 alternate}
+    @keyframes chew {from{transform:scaleY(1)}to{transform:scaleY(.45)}}
+    .arm {position:absolute;top:64%;width:24%;height:13%;background:#FFA598;border:4px solid #D98272;border-radius:60%;z-index:3}
+    .arm.left {left:-5%;transform:rotate(-28deg)}.arm.right {right:-5%;transform:rotate(28deg)}
+    .buddy.is-munching .arm.right {transform:translate(-21px,-33px) rotate(-50deg);transition:transform .25s}
+    .foot {position:absolute;bottom:1%;width:25%;height:14%;border-radius:50%;background:#F98C84;border:4px solid #D98272;z-index:2}
+    .foot.left {left:12%;transform:rotate(-17deg)}.foot.right{right:12%;transform:rotate(17deg)}
+    .food-emoji {position:absolute;z-index:5;bottom:4%;left:calc(50% + 20px);font-size:31px;opacity:0;pointer-events:none}
+    .buddy.is-munching .food-emoji {animation:takebite 1s ease-out}
+    @keyframes takebite {0%{opacity:0;transform:translate(25px,35px) scale(1)}18%{opacity:1}75%{opacity:1;transform:translate(-27px,-66px) scale(.8)}100%{opacity:0;transform:translate(-30px,-76px) scale(.2)}}
+    .stage-shadow {position:absolute;bottom:2%;left:25%;width:50%;height:17px;background:#EFC8B4;opacity:.6;border-radius:50%;filter:blur(6px)}
+    .preview {position:absolute;bottom:8%;right:7%;z-index:8;width:88px;height:110px;border:3px solid white;border-radius:17px;background:#E5D8CF;box-shadow:0 3px 14px #754D3840;overflow:hidden;display:none}
+    .preview.visible {display:block}
+    .preview video {width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+    .preview .live {position:absolute;top:7px;left:7px;font-size:9px;font-weight:900;color:white;background:#E65D67;padding:4px 6px;border-radius:7px}
+    .sparkle {position:absolute;z-index:20;pointer-events:none;font-size:25px;opacity:0;transform:translateY(10px)}
+    .sparkle.active {animation:sparkup .85s ease-out forwards}
+    @keyframes sparkup {0%{opacity:0;transform:translateY(10px) scale(.6)}25%{opacity:1}100%{opacity:0;transform:translateY(-65px) scale(1.3)}}
+    .status {display:flex;justify-content:center;margin:0 0 14px;position:relative;z-index:2}
+    .status-pill {display:flex;align-items:center;gap:7px;background:#FFFDF7;padding:9px 14px;border:1px solid #EDDBD0;border-radius:999px;font-size:12px;font-weight:900;color:#876F61}
+    .status-dot {height:8px;width:8px;background:#D4BAA5;border-radius:50%}
+    .status-pill.found .status-dot {background:#61B58A;box-shadow:0 0 0 3px #D4F0DF}
+    .status-pill.busy .status-dot {background:#EFAF5B;animation:pulse 1s ease-in-out infinite}
+    @keyframes pulse{50%{opacity:.35}}
+    .controls {display:grid;grid-template-columns:1fr 1fr;gap:12px;position:relative;z-index:2}
+    .action {min-height:91px;border-radius:24px;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;box-shadow:0 6px 0 #D8C7B9;transition:transform .13s,box-shadow .13s}
+    .action:active {transform:translateY(4px);box-shadow:0 2px 0 #D8C7B9}
+    .action.primary {background:var(--coral);color:white;box-shadow:0 6px 0 #D96A55}
+    .action.secondary {background:#FFFDF8;color:#865A46;border:2px solid #F1DAC7;box-shadow:0 5px 0 #F2DDCE}
+    .action .large {font-size:clamp(14px,4.2vw,18px);font-weight:1000;white-space:nowrap}
+    .action .small {font-size:11px;font-weight:800;opacity:.8}
+    .action .emoji {font-size:21px}
+    .camera-row {display:flex;align-items:center;gap:11px;margin:18px 0 0;padding:13px 16px;background:#FFFDF8;border:1px solid #F1DFD0;border-radius:19px;box-shadow:0 4px 0 #F4E4D5;position:relative;z-index:2}
+    .camera-symbol {width:36px;height:36px;flex-shrink:0;border-radius:13px;background:#FFE9D5;display:grid;place-items:center;font-size:20px}
+    .camera-label {flex:1;min-width:0}.camera-label strong{font-size:13px;display:block}.camera-label span{font-size:11px;color:#9E8D80;display:block;line-height:1.45;margin-top:3px}
+    .camera-btn {border:0;border-radius:999px;background:#74574C;color:white;padding:11px 14px;white-space:nowrap;font-size:12px;font-weight:900;min-width:95px}
+    .camera-btn:disabled {opacity:.6}
+    .bottom-meta {display:flex;justify-content:space-between;align-items:center;gap:8px;margin:18px 3px 0;color:#998477;font-size:11px;font-weight:700}
+    .toggle-line{display:flex;align-items:center;gap:7px;cursor:pointer}.toggle-line input{accent-color:#F27A69;width:18px;height:18px;cursor:pointer}
+    .privacy {text-align:center;color:#A48E81;font-size:10px;line-height:1.6;padding:14px 2px 0;margin:0}
+    .toast {position:fixed;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(100px);width:max-content;max-width:calc(100vw - 40px);background:#51413B;color:white;border-radius:16px;padding:12px 17px;font-size:12px;z-index:30;opacity:0;pointer-events:none;transition:transform .25s,opacity .25s;text-align:center}
+    .toast.shown {transform:translateX(-50%) translateY(0);opacity:1}
+    @media (max-height:740px) { .app{padding-top:10px}.intro{margin-top:6px}.bubble{margin-top:10px}.stage{height:clamp(230px,34svh,280px)}.status{margin-bottom:9px}.controls .action{min-height:75px}.camera-row{margin-top:12px}.bottom-meta{margin-top:13px}}
+    @media (prefers-reduced-motion:reduce) {*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+  </style>
+</head>
+<body>
+<main class="app" id="app">
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true">🍙</span><span>もぐとも</span></div>
+    <button id="voiceButton" type="button" class="icon-button" aria-label="声をオフにする" aria-pressed="true" title="声のオン・オフ">🔊</button>
+  </header>
+  <section class="intro" aria-label="アプリのタイトル">
+    <p class="eyebrow">ごはんの じかんが たのしくなる</p>
+    <h1>いっしょに <span class="pink">ぱくっ！</span></h1>
+    <p class="subhead">もぐちゃんと たのしく もぐもぐしよう</p>
+  </section>
+  <section aria-label="もぐちゃんのキャラクター">
+    <div class="bubble" role="status" aria-live="polite"><p id="saying">いっしょに ごはん たべよ！</p></div>
+    <div class="stage" id="stage">
+      <span class="decor one" aria-hidden="true">✳</span><span class="decor two" aria-hidden="true">♥</span><span class="decor three" aria-hidden="true">✦</span>
+      <div class="stage-shadow" aria-hidden="true"></div>
+      <div id="buddy" class="buddy" aria-label="目を動かす、ピンク色のもぐちゃん" role="img">
+        <div class="ear left"></div><div class="ear right"></div>
+        <div class="foot left"></div><div class="foot right"></div>
+        <div class="body"></div><div class="belly"></div>
+        <div class="arm left"></div><div class="arm right"></div>
+        <div class="eye left"><div class="eye-inner"><div class="shine"></div><div class="dot"></div></div><div class="eyelid"></div></div>
+        <div class="eye right"><div class="eye-inner"><div class="shine"></div><div class="dot"></div></div><div class="eyelid"></div></div>
+        <div class="cheek left"></div><div class="cheek right"></div>
+        <div class="mouth"></div><div class="food-emoji" aria-hidden="true">🥕</div>
+      </div>
+      <div class="preview" id="preview"><video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video><span class="live">● LIVE</span></div>
+      <span class="sparkle" style="left:12%;top:30%" aria-hidden="true">✨</span>
+      <span class="sparkle" style="right:16%;top:15%" aria-hidden="true">⭐</span>
+      <span class="sparkle" style="left:31%;bottom:14%" aria-hidden="true">💛</span>
+      <span class="sparkle" style="right:20%;bottom:19%" aria-hidden="true">✨</span>
+    </div>
+  </section>
+  <div class="status"><div id="statusPill" class="status-pill"><span class="status-dot"></span><span id="statusText">カメラをつけると めが あうよ 👀</span></div></div>
+  <section class="controls" aria-label="ごはんの操作">
+    <button id="eatTogether" class="action secondary" type="button"><span class="emoji" aria-hidden="true">🥄</span><span class="large">いっしょに ぱくっ</span><span class="small">もぐちゃんも たべるよ</span></button>
+    <button id="ateButton" class="action primary" type="button"><span class="emoji" aria-hidden="true">🎉</span><span class="large">たべたよ！</span><span class="small">タップで ほめてもらおう</span></button>
+  </section>
+  <section class="camera-row" aria-label="カメラ設定">
+    <div class="camera-symbol" aria-hidden="true">📷</div>
+    <div class="camera-label"><strong>カメラで みまもる</strong><span id="cameraDescription">おかおと おくちへのてのうごきを みるよ</span></div>
+    <button type="button" class="camera-btn" id="cameraButton">カメラ ON</button>
+  </section>
+  <div class="bottom-meta">
+    <label class="toggle-line"><input type="checkbox" id="autoPraise" checked><span>じどうで ほめる</span></label>
+    <div id="biteCount" aria-live="polite">🌟 ぱくっ 0かい</div>
+  </div>
+  <p class="privacy">📱 映像は端末内で解析し、録画・アップロードしません。<br>カメラは HTTPS のページで利用できます。最初はAIモデルの読み込みが必要です。</p>
+  <div class="toast" id="toast" role="alert"></div>
+</main>
+<script>
+(() => {
+  'use strict';
+  const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22';
+  const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+  const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+  const $ = id => document.getElementById(id);
+  const video = $('video'), buddy = $('buddy'), saying = $('saying'), statusText = $('statusText'), statusPill = $('statusPill');
+  const cameraButton = $('cameraButton'), preview = $('preview'), voiceButton = $('voiceButton'), toast = $('toast');
+  const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
+  const distance = (a,b,w=1,h=1) => Math.hypot((a.x-b.x)*w,(a.y-b.y)*h);
+  const praiseWords = ['ぱくっ！すてき！✨','おいしそう！よかったね！','もぐもぐ できたね！👏','たべたね！うれしいな！','いっしょに たべると おいしいね！'];
+  const foods = ['🥕','🍙','🥦','🍓','🥔'];
+  let soundOn = true, stream = null, faceLandmarker = null, handLandmarker = null, starting = false;
+  let requestId = 0, frameId = null, lastInference = 0, faceVisible = false, lastFaceTime = 0;
+  let mealCount = 0, lastPraiseAt = -Infinity, lastInviteAt = performance.now(), lastActionAt = 0, munchTimeout=null, toastTimeout=null;
+  let waitingForHandToLeave = false, handEnteredAt = 0, handNearFrames = 0, mouthOpened = false;
+  let helloSaid = false, speechBusy = false, frameAvgMs=0;
+
+  function talk(text){
+    if (!soundOn || !('speechSynthesis' in window)) return;
+    try {
+      // Stop older utterances so the character never speaks over itself.
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text.replace(/[✨👏⭐🎉！]/g,''));
+      utterance.lang = 'ja-JP'; utterance.rate = 0.88; utterance.pitch = 1.25; utterance.volume = .95;
+      const voices = window.speechSynthesis.getVoices();
+      const voice = voices.find(v => v.lang === 'ja-JP' && v.localService) || voices.find(v => v.lang.startsWith('ja'));
+      if (voice) utterance.voice = voice;
+      window.speechSynthesis.speak(utterance);
+    } catch(e){ console.warn('Speech unavailable',e); }
+  }
+  function say(text, speak=true){ saying.textContent=text; if(speak) talk(text); }
+  function showToast(message){
+    toast.textContent=message; toast.classList.add('shown'); clearTimeout(toastTimeout);
+    toastTimeout=setTimeout(()=>toast.classList.remove('shown'),3600);
+  }
+  function status(label,state=''){
+    statusText.textContent=label; statusPill.className='status-pill'+(state?' '+state:'');
+  }
+  function look(x=0,y=0){
+    const width=buddy.getBoundingClientRect().width || 260;
+    buddy.style.setProperty('--look-x',`${(x*width*.039).toFixed(1)}px`);
+    buddy.style.setProperty('--look-y',`${(y*width*.03).toFixed(1)}px`);
+  }
+  function munch(withSpeech=true){
+    if (munchTimeout) clearTimeout(munchTimeout);
+    buddy.classList.remove('is-munching'); void buddy.offsetWidth;
+    buddy.querySelector('.food-emoji').textContent=foods[Math.floor(Math.random()*foods.length)];
+    buddy.classList.add('is-munching');
+    munchTimeout=setTimeout(()=>buddy.classList.remove('is-munching'),1280);
+    lastInviteAt=performance.now(); lastActionAt=lastInviteAt;
+    say('ぼくも ぱくっ！おいしい〜！',withSpeech);
+  }
+  function sparkle(){
+    document.querySelectorAll('.sparkle').forEach((el,i)=>{
+      el.classList.remove('active'); void el.offsetWidth;
+      setTimeout(()=>el.classList.add('active'),i*110);
+    });
+  }
+  function praise(source){
+    const now=performance.now();
+    if(source==='auto' && (now-lastPraiseAt < 8500 || !$('autoPraise').checked)) return;
+    mealCount++; $('biteCount').textContent=`🌟 ぱくっ ${mealCount}かい`;
+    lastPraiseAt=now; lastActionAt=now; lastInviteAt=now;
+    waitingForHandToLeave=false; handNearFrames=0; mouthOpened=false;
+    sparkle();
+    say(praiseWords[(mealCount-1)%praiseWords.length]);
+    if(navigator.vibrate && source==='manual') navigator.vibrate(30);
+  }
+  function resetGesture(){waitingForHandToLeave=false;handEnteredAt=0;handNearFrames=0;mouthOpened=false;}
+
+  function isLikelyBite(duration){
+    if(duration>=4200)return false;
+    // Brief contact requires visible mouth opening; slower contact may be a spoon bite.
+    return mouthOpened ? handNearFrames>=2 && duration>=300 : handNearFrames>=3 && duration>=550;
+  }
+  function observeBite(face,hands,now){
+    if (!$('autoPraise').checked || !hands?.length) {
+      if(waitingForHandToLeave && now-handEnteredAt>6000) resetGesture();
+      // When the hand disappears after visiting the mouth, this is a valid withdrawal.
+      if(!hands?.length && waitingForHandToLeave && isLikelyBite(now-handEnteredAt)){praise('auto');resetGesture();}
+      return;
+    }
+    const mouth={x:(face[13].x+face[14].x)/2,y:(face[13].y+face[14].y)/2};
+    const left=face[234],right=face[454],top=face[13],bottom=face[14];
+    const w=video.videoWidth||640, h=video.videoHeight||480;
+    const faceW=distance(left,right,w,h);
+    if (faceW < w*.095) {resetGesture();return;}
+    const mouthW=distance(face[61],face[291],w,h);
+    const openness=distance(top,bottom,w,h)/Math.max(mouthW,1);
+    let near=false;
+    for(const hand of hands){
+      // A fingertip approaching the lips and then moving away is a *bite candidate*.
+      for(const point of [4,8,12,16,20]){
+        if(distance(hand[point],mouth,w,h)<faceW*.35){near=true;break;}
+      }
+      if(near) break;
+    }
+    if(near){
+      if(!waitingForHandToLeave){ waitingForHandToLeave=true;handEnteredAt=now;handNearFrames=0;mouthOpened=false; }
+      handNearFrames++;
+      if(openness>.105) mouthOpened=true;
+    } else if(waitingForHandToLeave){
+      const duration=now-handEnteredAt;
+      // Avoid praising on a one-frame hand detection glitch.
+      if(isLikelyBite(duration)){praise('auto');}
+      resetGesture();
+    }
+    if(waitingForHandToLeave && now-handEnteredAt>4200) resetGesture();
+  }
+
+  async function createTask(Task,vision,options){
+    try { return await Task.createFromOptions(vision,{...options,baseOptions:{...options.baseOptions,delegate:'GPU'}}); }
+    catch(gpuError){
+      console.info('GPU inference unavailable, using CPU',gpuError);
+      return await Task.createFromOptions(vision,{...options,baseOptions:{...options.baseOptions,delegate:'CPU'}});
+    }
+  }
+  function stopCamera(showMessage=true){
+    requestId++;
+    if(frameId!==null){cancelAnimationFrame(frameId);frameId=null;}
+    if(stream){stream.getTracks().forEach(track=>track.stop());stream=null;}
+    video.pause(); video.srcObject=null; preview.classList.remove('visible');
+    cameraButton.textContent='カメラ ON'; cameraButton.disabled=false;
+    $('cameraDescription').textContent='おかおと おくちへのてのうごきを みるよ';
+    faceVisible=false;lastFaceTime=0;resetGesture();look();starting=false;
+    status('カメラをつけると めが あうよ 👀');
+    if(showMessage) say('また いっしょに たべようね！',false);
+  }
+  function loop(runId){
+    if (runId!==requestId || !stream) return;
+    const now=performance.now();
+    if (video.readyState>=2 && now-lastInference>125){
+      lastInference=now;
+      try {
+        const start=performance.now();
+        // detectForVideo is synchronous; throttle for mobile battery/heat.
+        const faces=faceLandmarker.detectForVideo(video,now).faceLandmarks;
+        const face=faces?.[0];
+        if(face){
+          lastFaceTime=now;
+          if(!faceVisible){
+            faceVisible=true; status('おかお みーつけた！ みてるよ 👀','found');
+            if(!helloSaid){helloSaid=true; say('みーつけた！いっしょに ぱくっ！');}
+          }
+          const center=face[1];
+          // Preview is mirrored, so reverse horizontal input for the avatar eyes.
+          look(clamp((.5-center.x)*2.3,-1,1),clamp((center.y-.48)*2.5,-1,1));
+          if(handLandmarker){
+            const hands=handLandmarker.detectForVideo(video,now).landmarks;
+            observeBite(face,hands,now);
+          }
+        } else if(now-lastFaceTime>1100){
+          if(faceVisible){faceVisible=false;status('おかおを さがしてるよ 👀','busy');}
+          resetGesture();look();
+        }
+        frameAvgMs=frameAvgMs*.85+(performance.now()-start)*.15;
+      } catch(e) {
+        console.error('Inference stopped',e);
+        showToast('カメラの解析でエラーが起きました。もう一度お試しください。');
+        stopCamera(false);return;
+      }
+    }
+    // Invite softly, without demanding bites or assigning a score.
+    if (now-lastInviteAt>39000 && now-lastActionAt>26000){
+      munch(soundOn && faceVisible); lastInviteAt=now;
+    }
+    frameId=requestAnimationFrame(()=>loop(runId));
+  }
+  async function startCamera(){
+    if(starting||stream) return;
+    if(!navigator.mediaDevices?.getUserMedia){
+      showToast('カメラには HTTPS のページが必要です。GitHub Pages などで開いてください。');
+      return;
+    }
+    starting=true; const runId=++requestId;
+    cameraButton.textContent='準備中…';cameraButton.disabled=true;
+    status('カメラを じゅんびしてるよ…','busy');
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:20,max:30}}});
+      if(runId!==requestId){stream.getTracks().forEach(track=>track.stop());stream=null;return;}
+      video.srcObject=stream; await video.play();
+      preview.classList.add('visible');
+      cameraButton.disabled=false; cameraButton.textContent='カメラ OFF';
+      status('おめめを じゅんびしてるよ…','busy');
+      if(!faceLandmarker){
+        const {FilesetResolver,FaceLandmarker,HandLandmarker}=await import(`${CDN}/+esm`);
+        const vision=await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+        faceLandmarker=await createTask(FaceLandmarker,vision,{baseOptions:{modelAssetPath:FACE_MODEL},runningMode:'VIDEO',numFaces:1,minFaceDetectionConfidence:.55,minFacePresenceConfidence:.5,minTrackingConfidence:.5});
+        if(runId!==requestId)return;
+        try{
+          handLandmarker=await createTask(HandLandmarker,vision,{baseOptions:{modelAssetPath:HAND_MODEL},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.5,minHandPresenceConfidence:.5,minTrackingConfidence:.5});
+        }catch(handError){
+          console.error('Hand tracking could not load',handError);
+          showToast('顔追跡は使えます。手の検出に失敗したので「たべたよ！」を使ってね。');
+        }
+      }
+      if(runId!==requestId)return;
+      cameraButton.disabled=false;cameraButton.textContent='カメラ OFF';
+      $('cameraDescription').textContent=handLandmarker?'おかおと てのうごきを みているよ':'おかおを みているよ';
+      status('おかおを さがしてるよ 👀','busy');
+      starting=false;lastInference=0;helloSaid=false;resetGesture();
+      lastInviteAt=performance.now();lastActionAt=lastInviteAt;
+      frameId=requestAnimationFrame(()=>loop(runId));
+    }catch(e){
+      console.error('Camera failed',e);
+      const cameraDenied=e?.name==='NotAllowedError'||e?.name==='PermissionDeniedError';
+      showToast(cameraDenied?'カメラが許可されていません。ブラウザのカメラ設定を確認してね。':'カメラを始められませんでした。通信とカメラの設定を確認してね。');
+      stopCamera(false);
+    }finally{ if(runId===requestId)starting=false; }
+  }
+  cameraButton.addEventListener('click',()=>{if(stream) stopCamera();else startCamera();});
+  $('ateButton').addEventListener('click',()=>praise('manual'));
+  $('eatTogether').addEventListener('click',()=>munch(true));
+  voiceButton.addEventListener('click',()=>{
+    soundOn=!soundOn; voiceButton.setAttribute('aria-pressed',String(soundOn));
+    voiceButton.setAttribute('aria-label',soundOn?'声をオフにする':'声をオンにする');
+    voiceButton.textContent=soundOn?'🔊':'🔇';
+    if(!soundOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+    if(soundOn)talk('おはなし するね！');
+  });
+  $('autoPraise').addEventListener('change',()=>{resetGesture();showToast($('autoPraise').checked?'じどうで ほめるよ！':'タップしたときだけ ほめるよ！');});
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){if('speechSynthesis' in window)window.speechSynthesis.cancel();if(stream)stopCamera(false);}
+  });
+  window.addEventListener('pagehide',()=>{if(stream)stopCamera(false);});
+  // Manual mode works before camera access or while offline.
+  look();
+})();
+</script>
+</body>
+</html>
