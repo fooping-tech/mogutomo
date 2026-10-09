@@ -21,6 +21,11 @@
     .icon-button {width:44px;height:44px;display:grid;place-items:center;border-radius:50%;border:1.5px solid #EEDCCC;background:#FFF9F0;color:var(--ink);font-size:23px;box-shadow:0 3px 0 #F1E2D0}
     .icon-button[aria-pressed="false"] {opacity:.6}
     .sound-controls {display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .buddy.is-happy {animation:happyhop .95s cubic-bezier(.22,.9,.3,1) 1}
+    .buddy.is-happy .arm.left {animation:waveleft .65s ease-in-out 2}
+    .buddy.is-happy .arm.right {animation:waveright .65s ease-in-out 2}
+    .buddy.is-happy .cheek {opacity:.72;transform:scale(1.12)}
+    .buddy.is-happy .mouth {top:61%;height:22px;border:4px solid #8D424A;border-top:0;background:#FFF0F0;border-radius:0 0 40px 40px}
     .intro {text-align:center;margin:14px auto 0;}
     .eyebrow {color:#D27D64;font-size:12px;font-weight:900;letter-spacing:.12em;margin:0 0 3px;}
     h1 {font-size:clamp(25px,7vw,33px);letter-spacing:.02em;line-height:1.35;margin:0;font-weight:900}
@@ -62,6 +67,15 @@
     .food-emoji {position:absolute;z-index:5;bottom:4%;left:calc(50% + 20px);font-size:31px;opacity:0;pointer-events:none}
     .buddy.is-munching .food-emoji {animation:takebite 1s ease-out}
     @keyframes takebite {0%{opacity:0;transform:translate(25px,35px) scale(1)}18%{opacity:1}75%{opacity:1;transform:translate(-27px,-66px) scale(.8)}100%{opacity:0;transform:translate(-30px,-76px) scale(.2)}}
+    @keyframes happyhop {0%{transform:translateY(2px) scale(1) rotate(-1deg)}20%{transform:translateY(-18px) scale(1.01) rotate(-3deg)}40%{transform:translateY(0) scale(.98) rotate(1deg)}65%{transform:translateY(-10px) scale(1.02) rotate(2deg)}100%{transform:translateY(3px) scale(1) rotate(-1deg)}}
+    @keyframes waveleft {0%,100%{transform:rotate(-28deg)}50%{transform:translate(-3px,-8px) rotate(-52deg)}}
+    @keyframes waveright {0%,100%{transform:rotate(28deg)}50%{transform:translate(3px,-10px) rotate(58deg)}}
+    @keyframes shadowbounce {0%,100%{transform:scaleX(1);opacity:.6}25%{transform:scaleX(.9);opacity:.45}55%{transform:scaleX(1.08);opacity:.68}}
+    .stage-shadow.happy {animation:shadowbounce .95s ease-out 1}
+    .hearts {position:absolute;inset:0;pointer-events:none;z-index:21}
+    .heart {position:absolute;left:50%;top:54%;font-size:26px;opacity:0;transform:translate(-50%,-50%) scale(.35)}
+    .heart.pop {animation:heartburst 1.05s ease-out forwards}
+    @keyframes heartburst {0%{opacity:0;transform:translate(var(--hx,0),var(--hy,0)) scale(.35)}18%{opacity:1}100%{opacity:0;transform:translate(calc(var(--hx,0) * 2.2),calc(var(--hy,0) - 58px)) scale(1.18)}}
     .stage-shadow {position:absolute;bottom:2%;left:25%;width:50%;height:17px;background:#EFC8B4;opacity:.6;border-radius:50%;filter:blur(6px)}
     .preview {position:absolute;bottom:8%;right:7%;z-index:8;width:88px;height:110px;border:3px solid white;border-radius:17px;background:#E5D8CF;box-shadow:0 3px 14px #754D3840;overflow:hidden;display:none}
     .preview.visible {display:block}
@@ -128,6 +142,12 @@
         <div class="mouth"></div><div class="food-emoji" aria-hidden="true">🥕</div>
       </div>
       <div class="preview" id="preview"><video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video><span class="live">● LIVE</span></div>
+      <div class="hearts" id="hearts" aria-hidden="true">
+        <span class="heart" style="--hx:-58px;--hy:-6px">💖</span>
+        <span class="heart" style="--hx:-18px;--hy:-30px">💕</span>
+        <span class="heart" style="--hx:22px;--hy:-22px">✨</span>
+        <span class="heart" style="--hx:58px;--hy:-2px">💛</span>
+      </div>
       <span class="sparkle" style="left:12%;top:30%" aria-hidden="true">✨</span>
       <span class="sparkle" style="right:16%;top:15%" aria-hidden="true">⭐</span>
       <span class="sparkle" style="left:31%;bottom:14%" aria-hidden="true">💛</span>
@@ -159,6 +179,7 @@
   const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
   const $ = id => document.getElementById(id);
   const video = $('video'), buddy = $('buddy'), saying = $('saying'), statusText = $('statusText'), statusPill = $('statusPill');
+  const stage = $('stage'), hearts = $('hearts');
   const cameraButton = $('cameraButton'), preview = $('preview'), voiceButton = $('voiceButton'), effectsButton = $('effectsButton'), toast = $('toast');
   const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
   const distance = (a,b,w=1,h=1) => Math.hypot((a.x-b.x)*w,(a.y-b.y)*h);
@@ -166,7 +187,7 @@
   const foods = ['🥕','🍙','🥦','🍓','🥔'];
   let soundOn = true, effectsOn = true, audioContext = null, stream = null, faceLandmarker = null, handLandmarker = null, starting = false;
   let requestId = 0, frameId = null, lastInference = 0, faceVisible = false, lastFaceTime = 0;
-  let mealCount = 0, lastPraiseAt = -Infinity, lastInviteAt = performance.now(), lastActionAt = 0, munchTimeout=null, toastTimeout=null;
+  let mealCount = 0, lastPraiseAt = -Infinity, lastInviteAt = performance.now(), lastActionAt = 0, munchTimeout=null, toastTimeout=null, happyTimeout=null;
   let waitingForHandToLeave = false, handEnteredAt = 0, handNearFrames = 0, mouthOpened = false;
   let helloSaid = false, speechBusy = false, frameAvgMs=0;
 
@@ -221,20 +242,56 @@
   document.addEventListener('pointerdown',()=>{void unlockEffects();},{passive:true});
   document.addEventListener('keydown',()=>{void unlockEffects();});
 
+  function chooseCuteVoice(){
+    if (!('speechSynthesis' in window)) return null;
+    const voices = window.speechSynthesis.getVoices().filter(v => /^ja(-|$)/i.test(v.lang || ''));
+    if(!voices.length) return null;
+    const score = v => {
+      const name = `${v.name||''} ${v.voiceURI||''}`.toLowerCase();
+      let s = 0;
+      if (v.localService) s += 3;
+      if (/kyoko|haruka|sakura|female|woman|girl|japanesefemale/.test(name)) s += 6;
+      if (/otoya|male|man|boy/.test(name)) s -= 3;
+      if (/premium|enhanced|natural/.test(name)) s += 1;
+      return s;
+    };
+    return voices.sort((a,b)=>score(b)-score(a))[0] || voices[0];
+  }
   function talk(text){
     if (!soundOn || !('speechSynthesis' in window)) return;
     try {
-      // Stop older utterances so the character never speaks over itself.
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text.replace(/[✨👏⭐🎉！]/g,''));
-      utterance.lang = 'ja-JP'; utterance.rate = 0.88; utterance.pitch = 1.25; utterance.volume = .95;
-      const voices = window.speechSynthesis.getVoices();
-      const voice = voices.find(v => v.lang === 'ja-JP' && v.localService) || voices.find(v => v.lang.startsWith('ja'));
+      utterance.lang = 'ja-JP';
+      utterance.rate = 0.93;
+      utterance.pitch = 1.42;
+      utterance.volume = .95;
+      const voice = chooseCuteVoice();
       if (voice) utterance.voice = voice;
       window.speechSynthesis.speak(utterance);
     } catch(e){ console.warn('Speech unavailable',e); }
   }
   function say(text, speak=true){ saying.textContent=text; if(speak) talk(text); }
+  function burstHearts(){
+    hearts?.querySelectorAll('.heart').forEach((el,i)=>{
+      el.classList.remove('pop');
+      void el.offsetWidth;
+      setTimeout(()=>el.classList.add('pop'), i*70);
+    });
+  }
+  function celebrate(){
+    if (happyTimeout) clearTimeout(happyTimeout);
+    buddy.classList.remove('is-happy');
+    stage?.querySelector('.stage-shadow')?.classList.remove('happy');
+    void buddy.offsetWidth;
+    buddy.classList.add('is-happy');
+    stage?.querySelector('.stage-shadow')?.classList.add('happy');
+    burstHearts();
+    happyTimeout = setTimeout(()=>{
+      buddy.classList.remove('is-happy');
+      stage?.querySelector('.stage-shadow')?.classList.remove('happy');
+    }, 980);
+  }
   function showToast(message){
     toast.textContent=message; toast.classList.add('shown'); clearTimeout(toastTimeout);
     toastTimeout=setTimeout(()=>toast.classList.remove('shown'),3600);
@@ -269,6 +326,7 @@
     mealCount++; $('biteCount').textContent=`🌟 ぱくっ ${mealCount}かい`;
     lastPraiseAt=now; lastActionAt=now; lastInviteAt=now;
     waitingForHandToLeave=false; handNearFrames=0; mouthOpened=false;
+    celebrate();
     sparkle();
     playEffect('praise');
     say(praiseWords[(mealCount-1)%praiseWords.length]);
@@ -331,6 +389,7 @@
     cameraButton.textContent='カメラ ON'; cameraButton.disabled=false;
     $('cameraDescription').textContent='おかおと おくちへのてのうごきを みるよ';
     faceVisible=false;lastFaceTime=0;resetGesture();look();starting=false;
+    buddy.classList.remove('is-happy'); stage?.querySelector('.stage-shadow')?.classList.remove('happy');
     status('カメラをつけると めが あうよ 👀');
     if(showMessage) say('また いっしょに たべようね！',false);
   }
