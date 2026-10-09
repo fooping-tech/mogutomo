@@ -370,7 +370,7 @@
     }
     // Invite softly, without demanding bites or assigning a score.
     if (now-lastInviteAt>39000 && now-lastActionAt>26000){
-      munch(soundOn && faceVisible); lastInviteAt=now;
+      munch(faceVisible); lastInviteAt=now;
     }
     frameId=requestAnimationFrame(()=>loop(runId));
   }
@@ -432,6 +432,7 @@
     effectsButton.setAttribute('aria-label',effectsOn?'効果音をオフにする':'効果音をオンにする');
     effectsButton.textContent=effectsOn?'🎵':'🔕';
     if(effectsOn) void unlockEffects().then(()=>playEffect('enabled'));
+    else if(audioContext?.state === 'running') void audioContext.suspend().catch(()=>{});
   });
   $('autoPraise').addEventListener('change',()=>{resetGesture();showToast($('autoPraise').checked?'じどうで ほめるよ！':'タップしたときだけ ほめるよ！');});
   document.addEventListener('visibilitychange',()=>{
