@@ -108,9 +108,12 @@ function mouthFrame(app,ratio,ms=155){
   return app.testing.observeMouth(faceWithOpenness(ratio),time);
 }
 function mouthCycle(app){
-  mouthFrame(app,.03);mouthFrame(app,.03);
-  mouthFrame(app,.35);mouthFrame(app,.35);
-  mouthFrame(app,.03);return mouthFrame(app,.03);
+  const events=[
+    mouthFrame(app,.03),mouthFrame(app,.03),
+    mouthFrame(app,.35),mouthFrame(app,.35),
+    mouthFrame(app,.03),mouthFrame(app,.03)
+  ];
+  return events.includes('bite')?'bite':events.includes('cooldown')?'cooldown':events.at(-1);
 }
 
 test('syntax and privacy invariants',()=>{
@@ -119,26 +122,32 @@ test('syntax and privacy invariants',()=>{
   assert.match(html,/録画・アップロードしません/);
 });
 
-test('mouth open -> close awards XP, debounce and cooldown block duplicates',()=>{
+test('mouth open -> close awards XP, startup guard, shorter cooldown and long holds',()=>{
   const app=makeApp();app.click('startPlaying');
   mouthFrame(app,.35);mouthFrame(app,.35);mouthFrame(app,.03);mouthFrame(app,.03);
   assert.equal(app.state().xp[0],0,'Do not count a mouth already open at startup');
   assert.equal(mouthCycle(app),'bite');
   assert.equal(app.state().xp[0],10);
-  assert.equal(mouthCycle(app),'face','Second cycle is within auto cooldown');
+  assert.equal(mouthCycle(app),'cooldown','Another cycle within the short cooldown is suppressed');
   assert.equal(app.state().xp[0],10);
-  app.advance(9000);
-  assert.equal(mouthCycle(app),'bite');
+  app.advance(1300);
+  assert.equal(mouthCycle(app),'bite','Bites are accepted without waiting 8.5 seconds');
   assert.equal(app.state().xp[0],20);
   app.testing.resetGesture();
-  app.advance(9000);
+  app.advance(1300);
   mouthFrame(app,.03);mouthFrame(app,.03);
   mouthFrame(app,.35);mouthFrame(app,.35);
-  mouthFrame(app,.35,4500);mouthFrame(app,.03);mouthFrame(app,.03);
-  assert.equal(app.state().xp[0],20,'Long open-mouth hold must not count');
+  mouthFrame(app,.35,4800);mouthFrame(app,.03);mouthFrame(app,.03);
+  assert.equal(app.state().xp[0],30,'A slow assisted feeding is still counted');
+  app.testing.resetGesture();
+  app.advance(1300);
+  mouthFrame(app,.03);mouthFrame(app,.03);
+  mouthFrame(app,.35);mouthFrame(app,.35);
+  mouthFrame(app,.35,10500);mouthFrame(app,.03);mouthFrame(app,.03);
+  assert.equal(app.state().xp[0],30,'Extremely long open-mouth holds do not count');
   app.get('autoPraise').checked=false;
   mouthCycle(app);
-  assert.equal(app.state().xp[0],20,'Manual-only setting disables recognition rewards');
+  assert.equal(app.state().xp[0],30,'Manual-only setting disables recognition rewards');
 });
 
 test('timeless combo and fever only change effects, not XP amount',()=>{
@@ -285,4 +294,47 @@ test('camera autofocus scrolls to a centered two-view frame under the sticky XP 
   scroll=null;
   app.testing.snapToCameraFrame();
   assert.equal(scroll,null,'Camera off must not cause additional automatic scroll');
+});
+
+test('brief strong aah -> closed bite works at lower frame rates',()=>{
+  const app=makeApp();app.click('startPlaying');
+  mouthFrame(app,.05,145);mouthFrame(app,.05,145);
+  const start=mouthFrame(app,.36,145);
+  const result=mouthFrame(app,.05,145);
+  assert.equal(start,'open');
+  assert.equal(result,'bite','Just one clearly open frame can be sufficient');
+  assert.equal(app.state().xp[0],10);
+});
+
+test('moderate one-frame mouth movement works with two closed frames',()=>{
+  const app=makeApp();app.click('startPlaying');
+  mouthFrame(app,.13);mouthFrame(app,.14);
+  const begin=mouthFrame(app,.245,130);
+  const close1=mouthFrame(app,.13,130);
+  const close2=mouthFrame(app,.13,130);
+  assert.equal(begin,'open');
+  assert.equal(close1,'closing');
+  assert.equal(close2,'bite');
+  assert.equal(app.state().xp[0],10);
+});
+
+test('small mouth movements and noisy single peaks are not rewarded',()=>{
+  const app=makeApp();app.click('startPlaying');
+  mouthFrame(app,.05);mouthFrame(app,.05);
+  mouthFrame(app,.13);mouthFrame(app,.05);mouthFrame(app,.05);
+  assert.equal(app.state().xp[0],0,'Talking-sized movement does not count');
+  mouthFrame(app,.19);mouthFrame(app,.05);mouthFrame(app,.05);
+  assert.equal(app.state().xp[0],0,'Isolated small peaks do not count');
+});
+
+test('recognition meter and camera status expose rearm/open/closed stages',()=>{
+  const app=makeApp();app.click('startPlaying');
+  assert.equal(mouthFrame(app,.12),'arming');
+  assert.equal(mouthFrame(app,.12),'arming');
+  assert.equal(mouthFrame(app,.12),'face');
+  assert.equal(mouthFrame(app,.30),'open');
+  assert.match(app.get('mouthMeterFill').style.height,/\d+%/);
+  const states=['arming','face','open','closing','bite','cooldown'];
+  for(const name of states)assert.match(html,new RegExp(name+':|'+name+'\\x27'),'status '+name);
+  assert.doesNotMatch(html,/lastPraiseAt < 8500/);
 });
