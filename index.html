@@ -582,6 +582,7 @@
     petXP[idx]=Math.min(LEVEL_STEPS[9],petXP[idx]+added);
     petBites[idx]++;
     const after=levelFor(petXP[idx]), leveled=after>before;
+    const evolved=stageFor(after).id!==stageFor(before).id;
     let unlocked=false;
     if(!secretUnlocked && allBaseMax()){
       secretUnlocked=true;unlocked=true;
@@ -597,17 +598,23 @@
     if(unlocked){
       selectedPet=5;renderPet();saveGrowth();
       saying.textContent='✨ ひみつのルミナが あらわれた！';
-      $('levelFlash').textContent='🌈 SECRET UNLOCK!';
+      $('levelFlash').textContent='🌈 ひみつのこ 登場！';
       runAnimation($('levelFlash'),'show');
+      animateEvolution();
+    }else if(evolved){
+      $('levelFlash').textContent='🌟 しんか！\n'+stageFor(after).name+'！';
+      runAnimation($('levelFlash'),'show');
+      animateEvolution();
     }else if(leveled){
       $('levelFlash').textContent='✨ LEVEL UP!\nLV.'+after+' ✨';
       runAnimation($('levelFlash'),'show');
+      showConfetti(16);
     }
     if(unlocked||leveled){
       if(levelTimer)clearTimeout(levelTimer);
       levelTimer=setTimeout(()=>$('levelFlash').classList.remove('show'),1800);
     }
-    return {added,leveled,unlocked,level:after};
+    return {added,leveled,evolved,unlocked,level:after};
   }
   function creatureNotes(kind,index=selectedPet){
     const notes=PETS[index].voice;
@@ -898,7 +905,7 @@
     celebrate();
     sparkle();
     cameraBiteBurst(source);
-    playEffect(result.unlocked?'secret':result.leveled?'levelUp':'praise');
+    playEffect(result.unlocked?'secret':result.evolved?'evolve':result.leveled?'levelUp':'praise');
     if(!result.unlocked) say(currentPet().name+'：'+praiseWords[(mealCount-1)%praiseWords.length]);
     if(navigator.vibrate && source==='manual') navigator.vibrate(30);
   }
@@ -1162,6 +1169,36 @@
     if(document.hidden){if(stream)stopCamera(false);}
   });
   window.addEventListener('pagehide',()=>{if(stream)stopCamera(false);});
+
+  $('openDex').addEventListener('click',showDex);
+  $('closeDex').addEventListener('click',hideDex);
+  $('dexOverlay').addEventListener('click',event=>{if(event.target===$('dexOverlay'))hideDex();});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')hideDex();});
+  $('petCollection').addEventListener('click',event=>{
+    const target=event.target.closest?.('[data-pet-index]');
+    if(target)selectPet(Number(target.dataset.petIndex));
+  });
+  $('dexGrid').addEventListener('click',event=>{
+    const target=event.target.closest?.('[data-pet-index]');
+    if(target&&!target.disabled)selectPet(Number(target.dataset.petIndex));
+  });
+  $('saveNow').addEventListener('click',()=>{
+    if(saveGrowth())showToast('💾 育成データを保存したよ！');
+  });
+  $('resetGrowth').addEventListener('click',()=>{
+    if(!window.confirm('6体すべてのレベル・経験値・ひみつのキャラ・ぱくっ回数を最初からにします。元には戻せません。リセットしますか？'))return;
+    petXP=[0,0,0,0,0,0];petBites=[0,0,0,0,0,0];
+    mealCount=0;selectedPet=0;secretUnlocked=false;lastPraiseAt=-Infinity;
+    if(xpTimer)clearTimeout(xpTimer);
+    if(levelTimer)clearTimeout(levelTimer);
+    if(evolveTimer)clearTimeout(evolveTimer);
+    $('xpPop').classList.remove('show');$('levelFlash').classList.remove('show');
+    buddy.classList.remove('evolving','is-happy','is-munching');
+    stage.classList.remove('evolution-light');
+    $('confettiField').replaceChildren();hideDex();
+    renderPet();saying.textContent=currentPet().intro;saveGrowth();
+    showToast('🌱 また いっしょに そだてようね！');
+  });
   $('prevPet').addEventListener('click',()=>switchPet(-1));
   $('nextPet').addEventListener('click',()=>switchPet(1));
   let swipeStart=null;
