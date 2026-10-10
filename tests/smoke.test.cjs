@@ -16,7 +16,7 @@ assert.ok(script.includes(marker),'Test-injection anchor still present');
 const source=script.replace(marker,[
   "  window.__testing={",
   "    getState:()=>({xp:[...petXP],events:[...achievements],selected:selectedPet,session:sessionBites,secret:secretUnlocked,volume,voice:soundOn,auto:$('autoPraise').checked}),",
-  "    observeMouth,stageFor,soundNotes,resetGesture,updateCameraLayout",
+  "    observeMouth,stageFor,soundNotes,resetGesture,updateCameraLayout,snapToCameraFrame",
   "  };",
   marker
 ].join('\n'));
@@ -247,4 +247,40 @@ test('camera preview occupies the button slot without covering avatar; manual fa
   assert.equal(app.get('cameraSession').hidden,true);
   assert.equal(app.get('manualFallback').hidden,true);
   assert.equal(app.get('app').classList.contains('camera-active'),false);
+});
+
+test('camera states sit outside the face video and fit on short screens',()=>{
+  const blockStart=html.indexOf('<div class="camera-view-layout">');
+  const blockEnd=html.indexOf('id="manualFallback"',blockStart);
+  const left=html.indexOf('class="camera-side camera-side-left"',blockStart);
+  const face=html.indexOf('id="faceChip"',blockStart);
+  const status=html.indexOf('id="detectionState"',blockStart);
+  const video=html.indexOf('id="video"',blockStart);
+  const mouth=html.indexOf('id="mouthChip"',blockStart);
+  const right=html.indexOf('class="camera-side camera-side-right"',blockStart);
+  assert.ok(blockStart>=0 && left>blockStart&&face>left&&status>face&&video>status,
+    'Left rail is beside, not inside, the video');
+  assert.ok(right>video&&mouth>right&&mouth<blockEnd,
+    'Right mouth indicator is beside the video');
+  assert.match(html,/\.app\.camera-active \.stage\{height:clamp\(160px,25svh,230px\)\}/);
+  assert.match(html,/@media\(max-height:690px\)/);
+});
+
+test('camera autofocus scrolls to a centered two-view frame under the sticky XP header',()=>{
+  const app=makeApp();
+  let scroll=null;
+  app.window.innerHeight=760;
+  app.window.scrollY=0;
+  app.window.scrollTo=options=>{scroll=options;};
+  app.get('growthCard').getBoundingClientRect=()=>({top:0,height:85});
+  app.get('playFrame').getBoundingClientRect=()=>({top:400,height:470});
+  app.testing.updateCameraLayout(true);
+  app.testing.snapToCameraFrame();
+  assert.ok(scroll,'Must scroll on camera-on frame');
+  assert.equal(scroll.top,209);
+  assert.equal(scroll.behavior,'smooth');
+  app.testing.updateCameraLayout(false);
+  scroll=null;
+  app.testing.snapToCameraFrame();
+  assert.equal(scroll,null,'Camera off must not cause additional automatic scroll');
 });
