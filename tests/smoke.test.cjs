@@ -279,6 +279,8 @@ test('camera autofocus scrolls to a centered two-view frame under the sticky XP 
   assert.ok(scroll,'Must scroll on camera-on frame');
   assert.equal(scroll.top,209);
   assert.equal(scroll.behavior,'smooth');
+  app.click('cameraStopInline');
+  assert.equal(app.get('cameraSession').hidden,true,'Inline close should leave camera mode');
   app.testing.updateCameraLayout(false);
   scroll=null;
   app.testing.snapToCameraFrame();
