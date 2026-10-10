@@ -385,11 +385,46 @@
   }
 
   async function createTask(Task,vision,options){
-    try { return await Task.createFromOptions(vision,{...options,baseOptions:{...options.baseOptions,delegate:'GPU'}}); }
-    catch(gpuError){
-      console.info('GPU inference unavailable, using CPU',gpuError);
-      return await Task.createFromOptions(vision,{...options,baseOptions:{...options.baseOptions,delegate:'CPU'}});
+    // Older iOS Safari WebGL implementations can fail to create GPU delegates.
+    const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    const order=ios?['CPU','GPU']:['GPU','CPU'];
+    let lastError;
+    for(const delegate of order){
+      try{return await Task.createFromOptions(vision,{...options,baseOptions:{...options.baseOptions,delegate}});}
+      catch(e){lastError=e;console.warn('MediaPipe '+delegate+' initialization failed',e);}
     }
+    throw lastError||new Error('MediaPipe initialization failed');
+  }
+  async function loadVisionLibrary(){
+    try{return await import(`${CDN}/+esm`);}
+    catch(primary){
+      console.warn('Primary MediaPipe CDN unavailable',primary);
+      return await import('https://esm.sh/@mediapipe/tasks-vision@0.10.22?bundle');
+    }
+  }
+  function cameraExplanation(error){
+    const name=error?.name||'UnknownError';
+    switch(name){
+      case 'NotAllowedError':case 'PermissionDeniedError':
+        return 'カメラの許可がありません。iPhoneの設定 → Safari → カメラを確認してね。';
+      case 'NotFoundError':case 'DevicesNotFoundError':
+        return '使えるカメラが見つかりませんでした。';
+      case 'NotReadableError':case 'TrackStartError':
+        return 'カメラがほかのアプリで使用中の可能性があります。';
+      case 'OverconstrainedError':
+        return 'カメラの設定が合いません。ほかのカメラ設定で再試行してね。';
+      case 'SecurityError':
+        return 'ブラウザ側でカメラが制限されています。Safariで直接開いてください。';
+      default:
+        return 'カメラが起動できません。Safariで直接開き、エラー詳細を確認してください。';
+    }
+  }
+  function showCameraIssue(phase,error){
+    console.error(phase,error);
+    cameraError.hidden=false;
+    cameraError.open=false;
+    const name=error?.name||'Error',message=error?.message||String(error||'詳細不明');
+    cameraErrorText.textContent=`${phase}\n${name}: ${message}\nブラウザ: ${navigator.userAgent}`;
   }
   function stopCamera(showMessage=true){
     requestId++;
@@ -432,9 +467,13 @@
         }
         frameAvgMs=frameAvgMs*.85+(performance.now()-start)*.15;
       } catch(e) {
-        console.error('Inference stopped',e);
-        showToast('カメラの解析でエラーが起きました。もう一度お試しください。');
-        stopCamera(false);return;
+        // Keep the camera preview usable when only face analysis fails.
+        showCameraIssue('カメラ映像のAI解析',e);
+        faceLandmarker=null; handLandmarker=null;
+        faceVisible=false; resetGesture(); look();
+        status('映像は映るよ。AI解析が止まったので手動で遊んでね。','busy');
+        $('cameraDescription').textContent='映像は表示中。AIを再試行するにはカメラをOFF→ON';
+        return;
       }
     }
     // Invite softly, without demanding bites or assigning a score.
@@ -444,46 +483,79 @@
     frameId=requestAnimationFrame(()=>loop(runId));
   }
   async function startCamera(){
-    if(starting||stream) return;
-    if(!navigator.mediaDevices?.getUserMedia){
-      showToast('カメラには HTTPS のページが必要です。GitHub Pages などで開いてください。');
+    if(starting||stream)return;
+    cameraError.hidden=true;
+    cameraError.open=false;
+    if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){
+      const e=new Error('getUserMedia unavailable or insecure context');
+      showCameraIssue('カメラAPIの利用',e);
+      status('SafariでHTTPSのページを開いてね','busy');
+      showToast('カメラはSafariで直接開いてください。');
       return;
     }
-    starting=true; const runId=++requestId;
+    starting=true;
+    const runId=++requestId;
     cameraButton.textContent='準備中…';cameraButton.disabled=true;
     status('カメラを じゅんびしてるよ…','busy');
+    // Camera permission is requested first, separately from model initialization.
     try{
-      stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:20,max:30}}});
-      if(runId!==requestId){stream.getTracks().forEach(track=>track.stop());stream=null;return;}
-      video.srcObject=stream; await video.play();
+      let acquired;
+      try{
+        acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'user'},width:{ideal:640},height:{ideal:480},frameRate:{ideal:20,max:30}}});
+      }catch(cameraErrorOriginal){
+        // A generic request can succeed when the device rejects a constraint.
+        if(cameraErrorOriginal.name!=='OverconstrainedError')throw cameraErrorOriginal;
+        acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:true});
+      }
+      if(runId!==requestId){acquired.getTracks().forEach(t=>t.stop());return;}
+      stream=acquired;video.srcObject=stream;
+      await video.play();
+      if(runId!==requestId)return;
       preview.classList.add('visible');
-      cameraButton.disabled=false; cameraButton.textContent='カメラ OFF';
-      status('おめめを じゅんびしてるよ…','busy');
+      cameraButton.textContent='カメラ OFF';cameraButton.disabled=false;
+      status('カメラはOK！ おめめを準備するね…','busy');
+    }catch(e){
+      if(runId!==requestId)return;
+      stopCamera(false);
+      showCameraIssue('カメラの起動または映像再生',e);
+      status('カメラを使えませんでした','busy');
+      showToast(cameraExplanation(e));
+      return;
+    }
+    try{
       if(!faceLandmarker){
-        const {FilesetResolver,FaceLandmarker,HandLandmarker}=await import(`${CDN}/+esm`);
+        const {FilesetResolver,FaceLandmarker,HandLandmarker}=await loadVisionLibrary();
+        if(runId!==requestId)return;
+        status('AIモデルを読み込んでいるよ…','busy');
         const vision=await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
+        if(runId!==requestId)return;
         faceLandmarker=await createTask(FaceLandmarker,vision,{baseOptions:{modelAssetPath:FACE_MODEL},runningMode:'VIDEO',numFaces:1,minFaceDetectionConfidence:.55,minFacePresenceConfidence:.5,minTrackingConfidence:.5});
         if(runId!==requestId)return;
         try{
           handLandmarker=await createTask(HandLandmarker,vision,{baseOptions:{modelAssetPath:HAND_MODEL},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.5,minHandPresenceConfidence:.5,minTrackingConfidence:.5});
         }catch(handError){
-          console.error('Hand tracking could not load',handError);
-          showToast('顔追跡は使えます。手の検出に失敗したので「たべたよ！」を使ってね。');
+          handLandmarker=null;
+          showCameraIssue('手の動き検出（顔追跡は動作中）',handError);
+          showToast('顔追跡は動くよ！手の検出が使えないときは「たべたよ！」を押してね。');
         }
       }
       if(runId!==requestId)return;
-      cameraButton.disabled=false;cameraButton.textContent='カメラ OFF';
+      cameraButton.textContent='カメラ OFF';cameraButton.disabled=false;
       $('cameraDescription').textContent=handLandmarker?'おかおと てのうごきを みているよ':'おかおを みているよ';
       status('おかおを さがしてるよ 👀','busy');
-      starting=false;lastInference=0;helloSaid=false;resetGesture();
+      lastInference=0;helloSaid=false;resetGesture();
       lastInviteAt=performance.now();lastActionAt=lastInviteAt;
       frameId=requestAnimationFrame(()=>loop(runId));
     }catch(e){
-      console.error('Camera failed',e);
-      const cameraDenied=e?.name==='NotAllowedError'||e?.name==='PermissionDeniedError';
-      showToast(cameraDenied?'カメラが許可されていません。ブラウザのカメラ設定を確認してね。':'カメラを始められませんでした。通信とカメラの設定を確認してね。');
-      stopCamera(false);
-    }finally{ if(runId===requestId)starting=false; }
+      if(runId!==requestId)return;
+      faceLandmarker=null;handLandmarker=null;
+      showCameraIssue('AIモデルの取得・初期化',e);
+      status('カメラはOK。AIの読み込みに失敗したよ','busy');
+      $('cameraDescription').textContent='映像は表示中。AIを再試行するにはカメラをOFF→ON';
+      showToast('カメラは使えます。AIモデルの通信に失敗しました。詳細を確認してね。');
+    }finally{
+      if(runId===requestId)starting=false;
+    }
   }
   cameraButton.addEventListener('click',()=>{if(stream) stopCamera();else startCamera();});
   $('ateButton').addEventListener('click',()=>praise('manual'));
