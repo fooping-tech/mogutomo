@@ -322,6 +322,154 @@
   let waitingForHandToLeave = false, handEnteredAt = 0, handNearFrames = 0, mouthOpened = false;
   let helloSaid = false, frameAvgMs=0, cameraBiteTimeout=null, cameraBiteUntil=0;
 
+  const LEVEL_STEPS=[0,10,25,45,70,100,135,175,220,270];
+  const XP_PER_BITE=10;
+  const SAVE_KEY='mogutomo_growth_v1';
+  const PETS=[
+    {id:'mogu',name:'もぐちゃん',kind:'うさぎ',species:'rabbit',emoji:'🐰',mark:'🍓',food:'🥕',intro:'いっしょに ぱくっ！',
+      colors:['#FFB8A6','#FF9287','#D98272','#FFDBCF','#FFEEE2','#F56D6D','#FFA598','#F98C84'],
+      voice:[[0,.15,800,1280,.52,'triangle'],[.17,.19,1140,890,.44,'sine'],[.38,.17,940,1240,.40,'triangle']]},
+    {id:'bear',name:'くまぽん',kind:'くま',species:'bear',emoji:'🐻',mark:'🍯',food:'🍠',intro:'くまぽんと のんびり もぐもぐ。',
+      colors:['#D8A478','#B7785F','#93614A','#EAC6A3','#FFF0D6','#DE7871','#D9A37C','#B98460'],
+      voice:[[0,.23,430,620,.58,'sine'],[.27,.25,560,430,.47,'triangle'],[.57,.22,520,690,.43,'sine']]},
+    {id:'cat',name:'ねこみん',kind:'ねこ',species:'cat',emoji:'🐱',mark:'🎀',food:'🐟',intro:'にゃんっと いっしょに たべよ。',
+      colors:['#D4C5F6','#A996DB','#8873B6','#F2DEFB','#FCEDFC','#E99FB8','#CCB8F1','#B19CDE'],
+      voice:[[0,.26,920,570,.5,'sine'],[.30,.25,730,1080,.43,'sine'],[.59,.25,990,750,.40,'triangle']]},
+    {id:'fox',name:'こんこん',kind:'きつね',species:'fox',emoji:'🦊',mark:'🍁',food:'🍙',intro:'こんこん！たのしく ぱくっ。',
+      colors:['#FFCC80','#F29C58','#C97845','#FFE5C2','#FFF6DC','#F58762','#F6B47C','#F19C55'],
+      voice:[[0,.11,1010,1420,.48,'triangle'],[.15,.11,1300,980,.45,'triangle'],[.31,.23,860,1220,.42,'sine']]},
+    {id:'chick',name:'ぴよまる',kind:'ひよこ',species:'chick',emoji:'🐥',mark:'🌼',food:'🌽',intro:'ぴよぴよ！いっぱい にこにこ。',
+      colors:['#FFEA82','#FFD452','#D8AB4D','#FFF4B3','#FFF8CE','#FAAD7A','#FFE27B','#FBD15D'],
+      voice:[[0,.10,1280,1620,.43,'triangle'],[.13,.09,1400,1780,.4,'triangle'],[.26,.13,1590,1240,.43,'sine']]},
+    {id:'secret',name:'ルミナ',kind:'ひみつのこ',species:'secret',emoji:'🌟',mark:'🌈',food:'🍬',intro:'やっと あえたね。きらりん！',
+      colors:['#BCA2FF','#725BCE','#644BAC','#D8C9FF','#F0E8FF','#FF96C9','#AD9AF4','#8B71DB'],
+      voice:[[0,.19,630,1120,.43,'sine'],[.18,.2,930,1580,.38,'triangle'],[.39,.32,1300,670,.37,'sine']]}
+  ];
+  let selectedPet=0, petXP=[0,0,0,0,0,0], petBites=[0,0,0,0,0,0], secretUnlocked=false;
+  let xpTimer=null, levelTimer=null;
+  const levelFor= xp => {
+    const amount=Math.max(0,Number(xp)||0);
+    let idx=0;
+    while(idx<9 && amount>=LEVEL_STEPS[idx+1])idx++;
+    return idx+1;
+  };
+  const allBaseMax=()=>petXP.slice(0,5).every(x=>levelFor(x)===10);
+  function saveGrowth(){
+    try{localStorage.setItem(SAVE_KEY,JSON.stringify({xp:petXP,bites:petBites,selected:selectedPet,meals:mealCount}));}
+    catch(e){console.info('Progress persistence unavailable',e);}
+  }
+  function loadGrowth(){
+    try{
+      const data=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
+      if(!data||!Array.isArray(data.xp)||data.xp.length<5)return;
+      petXP=Array.from({length:6},(_,i)=>clamp(Math.floor(Number(data.xp[i])||0),0,LEVEL_STEPS[9]));
+      if(Array.isArray(data.bites))petBites=Array.from({length:6},(_,i)=>clamp(Math.floor(Number(data.bites[i])||0),0,100000));
+      mealCount=clamp(Math.floor(Number(data.meals)||0),0,100000);
+      secretUnlocked=allBaseMax();
+      selectedPet=clamp(Math.floor(Number(data.selected)||0),0,secretUnlocked?5:4);
+    }catch(e){console.warn('Could not restore progress',e);}
+  }
+  function currentPet(){return PETS[selectedPet];}
+  function renderPet(){
+    const pet=currentPet(),lv=levelFor(petXP[selectedPet]);
+    const collectionCount=secretUnlocked?6:5;
+    const palette=['--fur-start','--fur-end','--fur-border','--ear-inside','--belly-color','--cheek-color','--arm-color','--foot-color'];
+    pet.colors.forEach((value,i)=>buddy.style.setProperty(palette[i],value));
+    buddy.style.setProperty('--growth',(1+(lv-1)*.017).toFixed(3));
+    buddy.dataset.species=pet.species;
+    buddy.setAttribute('aria-label',pet.name+'。'+pet.kind+'、レベル'+lv+'。左右スワイプで切り替え');
+    buddy.classList.toggle('is-grown',lv>=5);
+    buddy.classList.toggle('is-max',lv===10);
+    $('speciesMark').textContent=lv===10?'👑':lv>=5?'✨':pet.mark;
+    $('petName').textContent=pet.emoji+' '+pet.name;
+    $('petDescription').textContent=pet.kind+' ・ '+(selectedPet+1)+' / '+collectionCount+' ・ ↔スワイプ';
+    $('levelLabel').textContent=lv===10?'LV.10 MAX ✨':'LV.'+lv;
+    $('levelLabel').classList.toggle('maxed',lv===10);
+    const floor=LEVEL_STEPS[lv-1],ceil=lv===10?LEVEL_STEPS[9]:LEVEL_STEPS[lv];
+    const value=lv===10?ceil:petXP[selectedPet];
+    const step=ceil-floor||1, progressed=lv===10?100:clamp((value-floor)/step*100,0,100);
+    $('xpLabel').textContent=lv===10?'カンスト！':(value-floor)+' / '+step+' XP';
+    $('xpFill').style.width=progressed+'%';
+    $('xpTrack').setAttribute('aria-valuemin','0');
+    $('xpTrack').setAttribute('aria-valuemax',String(lv===10?1:step));
+    $('xpTrack').setAttribute('aria-valuenow',String(lv===10?1:value-floor));
+    $('petCollection').innerHTML=PETS.slice(0,collectionCount).map((p,i)=>{
+      const level=levelFor(petXP[i]);
+      return '<span class="collection-pet'+(i===selectedPet?' active':'')+(level===10?' max':'')+'"><strong>'+p.emoji+'</strong>'+(level===10?'MAX':'Lv.'+level)+'</span>';
+    }).join('');
+    $('collectionHint').textContent=secretUnlocked?
+      '🌟 ひみつのルミナが なかまになったよ！':
+      '5ひき みんな LV.10で ひみつのこが…？ ✨';
+    $('biteCount').textContent='🌟 ぱくっ '+mealCount+'かい';
+  }
+  function switchPet(delta){
+    const length=secretUnlocked?6:5;
+    selectedPet=(selectedPet+delta+length)%length;
+    if(munchTimeout)clearTimeout(munchTimeout);
+    if(happyTimeout)clearTimeout(happyTimeout);
+    buddy.classList.remove('is-munching','is-happy');
+    $('speciesMark').textContent='';
+    renderPet();
+    saying.textContent=currentPet().intro;
+    saveGrowth();
+    void playSound('hello','voice');
+  }
+  function runAnimation(el,className){
+    el.classList.remove(className);
+    void el.offsetWidth;
+    el.classList.add(className);
+  }
+  function rewardBite(){
+    const idx=selectedPet, before=levelFor(petXP[idx]);
+    const added=Math.min(XP_PER_BITE,Math.max(0,LEVEL_STEPS[9]-petXP[idx]));
+    petXP[idx]=Math.min(LEVEL_STEPS[9],petXP[idx]+added);
+    petBites[idx]++;
+    const after=levelFor(petXP[idx]), leveled=after>before;
+    let unlocked=false;
+    if(!secretUnlocked && allBaseMax()){
+      secretUnlocked=true;unlocked=true;
+    }
+    saveGrowth();
+    renderPet();
+    if(added){
+      $('xpPop').textContent='+'+added+' XP ✨';
+      runAnimation($('xpPop'),'show');
+      if(xpTimer)clearTimeout(xpTimer);
+      xpTimer=setTimeout(()=>$('xpPop').classList.remove('show'),1050);
+    }
+    if(unlocked){
+      selectedPet=5;renderPet();saveGrowth();
+      saying.textContent='✨ ひみつのルミナが あらわれた！';
+      $('levelFlash').textContent='🌈 SECRET UNLOCK!';
+      runAnimation($('levelFlash'),'show');
+    }else if(leveled){
+      $('levelFlash').textContent='✨ LEVEL UP!\nLV.'+after+' ✨';
+      runAnimation($('levelFlash'),'show');
+    }
+    if(unlocked||leveled){
+      if(levelTimer)clearTimeout(levelTimer);
+      levelTimer=setTimeout(()=>$('levelFlash').classList.remove('show'),1800);
+    }
+    return {added,leveled,unlocked,level:after};
+  }
+  function creatureNotes(kind,index=selectedPet){
+    const notes=PETS[index].voice;
+    if(kind==='hello')return notes.slice(0,2);
+    if(kind==='eatVoice')return notes.slice(0,2).map(([offset,duration,start,end,volume,wave])=>[offset*.75,duration*.78,start*.86,end*.82,volume,wave]);
+    return notes;
+  }
+  const EFFECT_NOTES={
+    munch:[[0,.12,430,230,.52,'triangle'],[.17,.10,315,210,.43,'sine'],[.30,.09,280,190,.40,'sine']],
+    praise:[[0,.16,523,610,.45,'sine'],[.13,.18,659,740,.46,'sine'],[.27,.18,784,900,.46,'sine'],[.41,.27,1047,1175,.50,'sine']],
+    levelUp:[[0,.13,523,700,.52,'triangle'],[.12,.16,659,850,.50,'sine'],[.28,.16,830,1080,.52,'triangle'],[.43,.38,1047,1396,.56,'sine']],
+    secret:[[0,.20,450,690,.5,'sine'],[.16,.2,600,860,.54,'triangle'],[.35,.23,880,1170,.54,'sine'],[.55,.42,1080,1620,.55,'triangle']],
+    enabled:[[0,.15,660,910,.62,'triangle']]
+  };
+  function soundNotes(kind,index=selectedPet){
+    if(kind==='hello'||kind==='eatVoice'||kind==='happyVoice')return creatureNotes(kind,index);
+    return EFFECT_NOTES[kind]||EFFECT_NOTES.enabled;
+  }
+
   // Everything is synthesized on-device, without speech voices or audio downloads.
   // A user gesture unlocks audio on iPhone; retries also handle WebKit's interrupted state.
   async function activateAudio(){
@@ -356,36 +504,9 @@
     osc.start(at);osc.stop(at+duration+.015);
     osc.onended=()=>{osc.disconnect();gain.disconnect();};
   }
-  function scheduleSound(kind){
-    // Friendly synthetic creature chirps; no OS Japanese TTS is used.
-    switch(kind){
-      case 'hello':
-        synthTone(800,1250,0,.17,.17,'triangle');
-        synthTone(1100,920,.21,.20,.13,'sine');
-        break;
-      case 'eatVoice':
-        synthTone(760,970,0,.115,.15,'triangle');
-        synthTone(1020,740,.14,.15,.12,'triangle');
-        break;
-      case 'happyVoice':
-        synthTone(710,1030,0,.16,.16,'triangle');
-        synthTone(920,1360,.18,.20,.16,'sine');
-        synthTone(1280,1040,.40,.18,.12,'triangle');
-        break;
-      case 'munch':
-        synthTone(430,230,0,.105,.14,'triangle');
-        synthTone(315,210,.16,.085,.11);
-        synthTone(280,190,.29,.085,.10);
-        break;
-      case 'praise':
-        synthTone(523,610,0,.16,.11);
-        synthTone(659,740,.13,.17,.12);
-        synthTone(784,900,.27,.18,.12);
-        synthTone(1047,1175,.41,.26,.14);
-        break;
-      case 'enabled':
-        synthTone(660,910,0,.16,.15,'triangle');
-        break;
+  function scheduleSound(kind,index=selectedPet){
+    for(const [offset,duration,from,to,volume,wave] of soundNotes(kind,index)){
+      synthTone(from,to,offset,duration,Math.min(.2,volume*.32),wave);
     }
   }
   // HTMLAudioElement plays through the media audio path on iPhone.
@@ -393,17 +514,11 @@
   const mediaPlayers = {};
   const mediaClips = {};
   function setAudioStatus(message){ $('audioStatus').textContent=message; }
-  function createSoundClip(kind){
-    if(mediaClips[kind])return mediaClips[kind];
+  function createSoundClip(kind,index=selectedPet){
+    const cacheKey=(kind==='hello'||kind==='eatVoice'||kind==='happyVoice')?kind+':'+index:kind;
+    if(mediaClips[cacheKey])return mediaClips[cacheKey];
     if(typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)throw Error('WAV Blob URL unavailable');
-    const notes={
-      hello:[[0,.17,800,1250,.53,'triangle'],[.21,.2,1100,920,.45,'sine']],
-      eatVoice:[[0,.115,760,970,.55,'triangle'],[.14,.15,1020,740,.45,'triangle']],
-      happyVoice:[[0,.16,710,1030,.5,'triangle'],[.18,.2,920,1360,.52,'sine'],[.4,.18,1280,1040,.38,'triangle']],
-      munch:[[0,.12,430,230,.52,'triangle'],[.17,.10,315,210,.43,'sine'],[.30,.09,280,190,.40,'sine']],
-      praise:[[0,.16,523,610,.45,'sine'],[.13,.18,659,740,.46,'sine'],[.27,.18,784,900,.46,'sine'],[.41,.27,1047,1175,.50,'sine']],
-      enabled:[[0,.15,660,910,.62,'triangle']]
-    }[kind]||[[0,.15,650,850,.5,'sine']];
+    const notes=soundNotes(kind,index);
     const rate=22050;
     const seconds=Math.max(...notes.map(n=>n[0]+n[1]))+.08;
     const count=Math.ceil(rate*seconds);
@@ -433,8 +548,8 @@
       const sample=Math.max(-.9,Math.min(.9,samples[i]));
       view.setInt16(44+i*2,Math.round(sample*32767),true);
     }
-    mediaClips[kind]=URL.createObjectURL(new Blob([data],{type:'audio/wav'}));
-    return mediaClips[kind];
+    mediaClips[cacheKey]=URL.createObjectURL(new Blob([data],{type:'audio/wav'}));
+    return mediaClips[cacheKey];
   }
   async function tryWebAudioFallback(kind,error){
     console.warn('HTML audio unavailable; trying Web Audio',error);
@@ -603,12 +718,12 @@
   function munch(withSpeech=true){
     if (munchTimeout) clearTimeout(munchTimeout);
     buddy.classList.remove('is-munching'); void buddy.offsetWidth;
-    buddy.querySelector('.food-emoji').textContent=foods[Math.floor(Math.random()*foods.length)];
+    buddy.querySelector('.food-emoji').textContent=currentPet().food;
     buddy.classList.add('is-munching');
     munchTimeout=setTimeout(()=>buddy.classList.remove('is-munching'),1280);
     lastInviteAt=performance.now(); lastActionAt=lastInviteAt;
     playEffect('munch');
-    say('ぼくも ぱくっ！おいしい〜！',withSpeech);
+    say(currentPet().name+'も ぱくっ！',withSpeech);
   }
   function sparkle(){
     document.querySelectorAll('.sparkle').forEach((el,i)=>{
@@ -619,14 +734,15 @@
   function praise(source){
     const now=performance.now();
     if(source==='auto' && (now-lastPraiseAt < 8500 || !$('autoPraise').checked)) return;
-    mealCount++; $('biteCount').textContent=`🌟 ぱくっ ${mealCount}かい`;
+    mealCount++;
     lastPraiseAt=now; lastActionAt=now; lastInviteAt=now;
     waitingForHandToLeave=false; handNearFrames=0; mouthOpened=false;
+    const result=rewardBite();
     celebrate();
     sparkle();
     cameraBiteBurst(source);
-    playEffect('praise');
-    say(praiseWords[(mealCount-1)%praiseWords.length]);
+    playEffect(result.unlocked?'secret':result.leveled?'levelUp':'praise');
+    if(!result.unlocked) say(currentPet().name+'：'+praiseWords[(mealCount-1)%praiseWords.length]);
     if(navigator.vibrate && source==='manual') navigator.vibrate(30);
   }
   function resetGesture(){waitingForHandToLeave=false;handEnteredAt=0;handNearFrames=0;mouthOpened=false;}
@@ -889,7 +1005,23 @@
     if(document.hidden){if(stream)stopCamera(false);}
   });
   window.addEventListener('pagehide',()=>{if(stream)stopCamera(false);});
-  // Manual mode works before camera access or while offline.
+  $('prevPet').addEventListener('click',()=>switchPet(-1));
+  $('nextPet').addEventListener('click',()=>switchPet(1));
+  let swipeStart=null;
+  buddy.addEventListener('pointerdown',event=>{
+    if(event.isPrimary===false)return;
+    swipeStart={x:event.clientX,y:event.clientY};
+  },{passive:true});
+  buddy.addEventListener('pointerup',event=>{
+    if(!swipeStart)return;
+    const dx=event.clientX-swipeStart.x,dy=event.clientY-swipeStart.y;
+    swipeStart=null;
+    if(Math.abs(dx)>=38 && Math.abs(dx)>Math.abs(dy)*1.25)switchPet(dx<0?1:-1);
+  },{passive:true});
+  buddy.addEventListener('pointercancel',()=>{swipeStart=null;});
+  // Restore per-character progress from this browser only; camera works without it.
+  loadGrowth();
+  renderPet();
   look();
 })();
 </script>
