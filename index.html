@@ -498,6 +498,80 @@
 
   const LEVEL_STEPS=[0,10,25,45,70,100,135,175,220,270];
   const XP_PER_BITE=10;
+  // A combo counts actions in this visit only. There is no timer, speed bonus or penalty.
+  const COMBO_MARKS=[{count:3,label:'NICE!',tone:'comboNice'},{count:5,label:'GREAT!',tone:'comboGreat'},{count:10,label:'SUPER FEVER!',tone:'comboFever'}];
+  let sessionBites=0,achievements=[],volume=.6,lowQuality=false,settingsVisible=false;
+  let impactTimer=null,petTimer=null,badgeTimer=null,idleTimer=null;
+  const preferReduced=()=>!!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  function refreshPerformance(){
+    lowQuality=preferReduced()||((navigator.hardwareConcurrency||8)<=4)||((navigator.deviceMemory||8)<=4)||frameAvgMs>60;
+    $('app').classList.toggle('quality-low',lowQuality);
+  }
+  function refreshCombo(){
+    const fever=sessionBites>=10;
+    $('comboBar').classList.toggle('fever',fever);
+    stage.classList.toggle('fever-mode',fever);
+    $('comboCount').textContent=sessionBites+'かい';
+    $('comboPill').textContent=fever?'🌈 FEVER':sessionBites>=5?'🌟 GREAT':sessionBites>=3?'✨ NICE':'いっしょに たのしもう';
+  }
+  function recordEvent(id){
+    if(achievements.includes(id))return false;
+    achievements.push(id);return true;
+  }
+  function showScreenBadge(message){
+    const el=$('screenBadge');el.textContent=message;runAnimation(el,'active');
+    if(badgeTimer)clearTimeout(badgeTimer);
+    badgeTimer=setTimeout(()=>el.classList.remove('active'),1450);
+  }
+  function instantFeedback(){
+    // Start visuals immediately, before persistence, list rendering or WAV synthesis.
+    if(impactTimer)clearTimeout(impactTimer);
+    const ring=$('feedbackBurst');
+    if(!preferReduced()){
+      runAnimation(ring,'active');runAnimation(stage,'impact');
+      impactTimer=setTimeout(()=>{ring.classList.remove('active');stage.classList.remove('impact');},600);
+    }
+    celebrate();sparkle();
+  }
+  function comboAfterBite(){
+    sessionBites++;
+    refreshCombo();
+    const mark=COMBO_MARKS.find(m=>m.count===sessionBites);
+    if(mark){
+      recordEvent('combo_'+sessionBites);
+      showScreenBadge(mark.label);
+      showConfetti(sessionBites>=10?55:sessionBites>=5?30:18);
+      playEffect(mark.tone);
+      return mark.tone;
+    }
+    if(sessionBites>=10&&sessionBites%5===0){
+      recordEvent('fever_'+sessionBites);
+      showScreenBadge('✨ FEVER × '+sessionBites);
+      showConfetti(38);playEffect('comboFever');
+      return 'comboFever';
+    }
+    return '';
+  }
+  function renderSettings(){
+    $('settingsVoice').checked=soundOn;$('settingsEffects').checked=effectsOn;
+    $('settingsAuto').checked=$('autoPraise').checked;
+    $('settingsVolume').value=String(Math.round(volume*100));
+    $('volumeValue').textContent=Math.round(volume*100)+'%';
+    voiceButton.textContent=soundOn?'🔊':'🔇';effectsButton.textContent=effectsOn?'🎵':'🔕';
+    voiceButton.setAttribute('aria-pressed',String(soundOn));
+    effectsButton.setAttribute('aria-pressed',String(effectsOn));
+  }
+  function openSettings(){
+    renderSettings();$('settingsOverlay').hidden=false;settingsVisible=true;$('closeSettings').focus();
+  }
+  function closeSettings(){
+    if(!settingsVisible)return;
+    $('settingsOverlay').hidden=true;settingsVisible=false;$('openSettings').focus();
+  }
+  function presentWelcome(){
+    $('welcomeOverlay').hidden=false;$('startPlaying').focus();
+  }
+
   const SAVE_KEY='mogutomo_growth_v1';
   const PETS=[
     {id:'mogu',name:'もぐちゃん',kind:'うさぎ',species:'rabbit',emoji:'🐰',mark:'🍓',food:'🥕',intro:'いっしょに ぱくっ！',
@@ -530,7 +604,8 @@
   function showConfetti(count=22){
     const field=$('confettiField');
     field.replaceChildren();
-    if(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches)return;
+    if(preferReduced())return;
+    count=Math.min(count,lowQuality?14:60);
     const frag=document.createDocumentFragment(),colors=['#FFCC4D','#F7808A','#8CE7D5','#B69AFF','#FFB05F','#FFFFFF'];
     for(let i=0;i<count;i++){
       const piece=document.createElement('i');
@@ -619,6 +694,7 @@
   function currentPet(){return PETS[selectedPet];}
   function renderPet(){
     const pet=currentPet(),lv=levelFor(petXP[selectedPet]),evo=stageFor(lv);
+    stage.dataset.world=pet.species;
     const collectionCount=secretUnlocked?6:5;
     const palette=['--fur-start','--fur-end','--fur-border','--ear-inside','--belly-color','--cheek-color','--arm-color','--foot-color'];
     pet.colors.forEach((value,i)=>buddy.style.setProperty(palette[i],value));
@@ -640,6 +716,12 @@
     const step=ceil-floor||1, progressed=lv===10?100:clamp((value-floor)/step*100,0,100);
     $('xpLabel').textContent=lv===10?'カンスト！':(value-floor)+' / '+step+' XP';
     $('xpFill').style.width=progressed+'%';
+    const nextStageLevel=lv<4?4:lv<7?7:10;
+    const nextStageXP=LEVEL_STEPS[nextStageLevel-1];
+    const remaining=Math.max(0,nextStageXP-petXP[selectedPet]);
+    const approaching=lv<10&&remaining<=20;
+    stage.classList.toggle('pre-evolution',approaching);
+    $('evolutionHint').textContent=lv===10?'👑 さいこうのすがた！':approaching?'✨ あと'+remaining+'XPで しんか！':'つぎの しんか：LV.'+nextStageLevel;
     $('xpTrack').setAttribute('aria-valuemin','0');
     $('xpTrack').setAttribute('aria-valuemax',String(lv===10?1:step));
     $('xpTrack').setAttribute('aria-valuenow',String(lv===10?1:value-floor));
