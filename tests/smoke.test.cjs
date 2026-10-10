@@ -15,7 +15,7 @@ const marker='  if(!hadSave)presentWelcome();\n})();';
 assert.ok(script.includes(marker),'Test-injection anchor still present');
 const source=script.replace(marker,[
   "  window.__testing={",
-  "    getState:()=>({xp:[...petXP],events:[...achievements],selected:selectedPet,session:sessionBites,secret:secretUnlocked,volume,voice:soundOn,auto:$('autoPraise').checked}),",
+  "    getState:()=>({xp:[...petXP],events:[...achievements],selected:selectedPet,session:sessionBites,secret:secretUnlocked,volume,voice:soundOn,auto:$('autoPraise').checked,positions:petPositions.map(p=>({...p}))}),",
   "    observeMouth,stageFor,soundNotes,resetGesture,updateCameraLayout,snapToCameraFrame,buildVoxelPet,drawVoxelCharacter,createSoundClip",
   "  };",
   marker
@@ -388,4 +388,71 @@ test('voxel game audio has original block textures and a valid PCM WAV',()=>{
   assert.match(wav,/blob:test-/,'Local generated sound is encoded as an audio Blob');
   assert.match(html,/tag\(0,'RIFF'\)/);
   assert.match(html,/signal=Math\.round\(signal\*/,'Waveforms are bit-crushed');
+});
+
+
+test('large stage contains name, navigation, speech and avatar; camera remains outside',()=>{
+  const at=html.indexOf('<div class="stage" id="stage">');
+  const name=html.indexOf('id="petName"',at);
+  const speech=html.indexOf('id="saying"',at);
+  const mover=html.indexOf('id="petMover"',at);
+  const avatar=html.indexOf('id="buddy"',at);
+  const fx=html.indexOf('id="hearts"',at);
+  const controls=html.indexOf('<section class="controls"',at);
+  const cam=html.indexOf('id="video"',at);
+  assert.ok(at>=0&&name>at&&speech>name&&mover>speech&&avatar>mover&&fx>avatar&&fx<controls);
+  assert.ok(cam>controls,'Camera is not a layer within the avatar');
+  assert.match(html,/\.app\.camera-active \.stage\{height:clamp\(315px,47svh,510px\)/);
+  assert.match(html,/\.stage-bubble\{position:absolute/);
+  assert.match(html,/\.pet-mover\{position:absolute/);
+  assert.match(html,/\.app\.camera-active \.roster-card,\.app\.camera-active \.intro\{display:none\}/);
+  assert.equal((html.match(/id="saying"/g)||[]).length,1);
+  assert.equal((html.match(/id="petName"/g)||[]).length,1);
+});
+
+test('tap reacts without XP; drag moves within bounds and restores per character',()=>{
+  const memory=new Map(),app=makeApp(memory);
+  app.click('startPlaying');
+  app.fire('buddy','pointerdown',{pointerId:3,isPrimary:true,clientX:130,clientY:200});
+  app.fire('buddy','pointerup',{pointerId:3,isPrimary:true,clientX:130,clientY:200});
+  assert.match(app.get('saying').textContent,/なでなで/);
+  assert.equal(app.state().xp[0],0,'Tapping a creature is not equivalent to eating');
+  app.fire('buddy','pointerdown',{pointerId:4,isPrimary:true,clientX:130,clientY:200});
+  app.fire('buddy','pointermove',{pointerId:4,isPrimary:true,clientX:190,clientY:160});
+  app.fire('buddy','pointerup',{pointerId:4,isPrimary:true,clientX:190,clientY:160});
+  assert.ok(app.state().positions[0].x>.1);
+  assert.ok(app.state().positions[0].y<-.1);
+  assert.match(app.get('petMover').style['--pet-x'],/px$/);
+  assert.equal(app.get('petMover').classList.contains('dragging'),false);
+  app.click('nextPet');
+  assert.equal(app.state().positions[1].x,0,'Another creature has its own placement');
+  app.fire('buddy','pointerdown',{pointerId:5,isPrimary:true,clientX:130,clientY:200});
+  app.fire('buddy','pointermove',{pointerId:5,isPrimary:true,clientX:-990,clientY:900});
+  app.fire('buddy','pointerup',{pointerId:5,isPrimary:true,clientX:-990,clientY:900});
+  assert.equal(app.state().positions[1].x,-.3,'Horizontal drag is bounded');
+  assert.equal(app.state().positions[1].y,.24,'Vertical drag is bounded');
+  const reloaded=makeApp(memory);
+  assert.equal(reloaded.state().selected,1);
+  assert.equal(reloaded.state().positions[1].x,-.3);
+  reloaded.click('prevPet');
+  assert.equal(reloaded.state().positions[0].x,app.state().positions[0].x);
+  reloaded.click('resetGrowth');
+  assert.ok(reloaded.state().positions.every(p=>p.x===0&&p.y===0));
+});
+
+test('voxel silhouette automatically uses the larger available canvas area',()=>{
+  const app=makeApp();
+  const points=[];
+  const ctx={
+    clearRect(){},beginPath(){},moveTo(x,y){points.push([x,y]);},
+    lineTo(x,y){points.push([x,y]);},closePath(){},fill(){},stroke(){},
+    fillRect(x,y){points.push([x,y]);}
+  };
+  app.get('voxelCanvas').getContext=()=>ctx;
+  assert.equal(app.testing.drawVoxelCharacter(),true);
+  const xs=points.map(x=>x[0]),ys=points.map(x=>x[1]);
+  assert.ok(Math.min(...xs)>=0 && Math.max(...xs)<=360,'Voxel pixels stay within the canvas');
+  assert.ok(Math.min(...ys)>=0 && Math.max(...ys)<=360,'The whole model is visible');
+  assert.ok(Math.max(...xs)-Math.min(...xs)>=180,'The character is much wider than before');
+  assert.ok(Math.max(...ys)-Math.min(...ys)>=275,'The character fills the stage vertically');
 });
