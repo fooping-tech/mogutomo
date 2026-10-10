@@ -368,7 +368,7 @@
   <details id="cameraError" class="camera-error" hidden><summary>カメラのエラー詳細</summary><code id="cameraErrorText"></code></details>
   <div id="audioStatus" class="audio-status" role="status" aria-live="polite">🔉で音をためせるよ</div>
   <div class="bottom-meta">
-    <label class="toggle-line"><input type="checkbox" id="autoPraise" checked><span>じどうで ほめる</span></label>
+    <label class="toggle-line"><input type="checkbox" id="autoPraise" checked><span>おくちの開閉で ほめる</span></label>
     <div id="biteCount" aria-live="polite">🌟 ぱくっ 0かい</div>
   </div>
   <section class="save-panel" id="savePanel" aria-label="育成データの保存とリセット">
@@ -384,7 +384,7 @@
       <p id="dexProgress" class="evolution-caption"></p>
     </div>
   </div>
-  <p class="privacy">📱 映像は端末内で解析し、録画・アップロードしません。<br>カメラは HTTPS のページで利用できます。最初はAIモデルの読み込みが必要です。</p>
+  <p class="privacy">📱 映像は端末内で解析し、録画・アップロードしません。<br>「ぱくっ」は口の開閉からの推定で、飲み込みを確認するものではありません。<br>カメラは HTTPS で利用できます。最初はAIモデルの読み込みが必要です。</p>
   <div class="toast" id="toast" role="alert"></div>
 </main>
 <script>
@@ -910,7 +910,7 @@
   }
   function praise(source){
     const now=performance.now();
-    if(source==='auto' && (now-lastPraiseAt < 8500 || !$('autoPraise').checked)) return;
+    if(source==='auto' && (now-lastPraiseAt < 8500 || !$('autoPraise').checked)) return false;
     mealCount++;
     lastPraiseAt=now; lastActionAt=now; lastInviteAt=now;
     resetGesture();
@@ -921,6 +921,7 @@
     playEffect(result.unlocked?'secret':result.evolved?'evolve':result.leveled?'levelUp':'praise');
     if(!result.unlocked) say(currentPet().name+'：'+praiseWords[(mealCount-1)%praiseWords.length]);
     if(navigator.vibrate && source==='manual') navigator.vibrate(30);
+    return true;
   }
   function resetGesture(){
     mouthPhase='arming';mouthClosedFrames=0;mouthOpenFrames=0;mouthCloseFrames=0;mouthOpenedAt=0;
@@ -955,7 +956,7 @@
       if(mouthCloseFrames>=2){
         const duration=now-mouthOpenedAt;
         resetGesture();
-        if(duration>=MIN_OPEN_MS){praise('auto');return 'bite';}
+        if(duration>=MIN_OPEN_MS)return praise('auto')?'bite':'face';
         return 'face';
       }
       return closed?'closing':'open';
