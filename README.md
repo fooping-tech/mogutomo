@@ -40,17 +40,23 @@ python3 -m http.server 8000
 ## 技術概要
 
 - HTML / CSS / JavaScript の1ファイルのみ。ビルド不要
-- MediaPipe Tasks Vision Face Landmarker + Hand Landmarker（初回に jsDelivr と Google Cloud Storage からダウンロード）
+- MediaPipe Tasks Vision 0.10.22-rc.20250304 Face Landmarker + Hand Landmarker（初回に jsDelivr と Google Cloud Storage からダウンロード）
 - `getUserMedia({ facingMode: 'user' })`、`AudioContext`（効果音合成）、端末内 WebAssembly / WebGL 推論
 - 顔ランドマークを視線位置にマッピング。口元と手の指先が顔幅に対して近づき、再び離れる動きを簡易判定
 - バッテリー節約のため推論間隔は約125ms以上
+
+## カメラ起動に失敗したとき
+
+- iPhoneではSafariでURLを直接開いてください。アプリ内ブラウザの制約でカメラが使えない場合があります
+- 権限エラーとモデル読み込みエラーは画面内で区別して表示します。「カメラのエラー詳細」を確認してください
+- モデル読み込みに失敗しても映像表示と手動の「たべたよ！」は使えます
 
 ## 既知の制約
 
 - スプーン/フォーク自体は認識していません。スプーンが口に来ても、手が見えない場合は反応できません
 - 暗い場所、口元が隠れる、カメラから遠い、複数人が映る場合は精度が低下します
 - 複数人が映る場合は MediaPipe が選んだ1名の顔を追跡します
-- 一部の iOS Safari では日本語音声の再生が自動イベントから制限される可能性があります
+- iOSでは最初のタップでAudioContextを解除します。上部の🔉ボタンで鳴き声と効果音を試せます
 - iPhone/iPad ではブラウザの音声再生制約があるため、最初に画面をタップして音声を有効化してください。消音モードや端末の音量設定によって聞こえ方が異なります
 - 初回のモデル読み込みにはネット接続が必要です
 - MediaPipe 自体の利用状況メトリクスについては Google のプライバシー記述も確認してください
