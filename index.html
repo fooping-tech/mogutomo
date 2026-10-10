@@ -888,8 +888,8 @@
     osc.onended=()=>{osc.disconnect();gain.disconnect();};
   }
   function scheduleSound(kind,index=selectedPet){
-    for(const [offset,duration,from,to,volume,wave] of soundNotes(kind,index)){
-      synthTone(from,to,offset,duration,Math.min(.2,volume*.32)*volume,wave);
+    for(const [offset,duration,from,to,toneVolume,wave] of soundNotes(kind,index)){
+      synthTone(from,to,offset,duration,Math.min(.2,toneVolume*.32)*volume,wave);
     }
   }
   // HTMLAudioElement plays through the media audio path on iPhone.
@@ -898,7 +898,9 @@
   const mediaClips = {};
   function setAudioStatus(message){ $('audioStatus').textContent=message; }
   function createSoundClip(kind,index=selectedPet){
-    const cacheKey=(['hello','eatVoice','happyVoice','idleVoice','rareVoice'].includes(kind))?kind+':'+index+':'+stageFor(levelFor(petXP[index])).id:kind;
+    const baseKey=(['hello','eatVoice','happyVoice','idleVoice','rareVoice'].includes(kind))?kind+':'+index+':'+stageFor(levelFor(petXP[index])).id:kind;
+    // PCM volume, not only HTMLMediaElement.volume: iOS Safari can ignore that property.
+    const cacheKey=baseKey+':v'+Math.round(volume*100);
     if(mediaClips[cacheKey])return mediaClips[cacheKey];
     if(typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)throw Error('WAV Blob URL unavailable');
     const notes=soundNotes(kind,index);
@@ -935,7 +937,7 @@
     view.setUint16(32,2,true);view.setUint16(34,16,true);
     tag(36,'data');view.setUint32(40,count*2,true);
     for(let i=0;i<count;i++){
-      const sample=Math.max(-.9,Math.min(.9,samples[i]));
+      const sample=Math.max(-.9,Math.min(.9,samples[i]*volume));
       view.setInt16(44+i*2,Math.round(sample*32767),true);
     }
     mediaClips[cacheKey]=URL.createObjectURL(new Blob([data],{type:'audio/wav'}));
@@ -970,7 +972,7 @@
       }
       player.pause();
       player.src=createSoundClip(kind);
-      player.volume=volume;
+      player.volume=1; // Already scaled in WAV samples; works even if Safari ignores volume changes.
       setAudioStatus('🔉 音を再生中。聞こえないときは音量と消音モードを確認してね。');
       const result=player.play();
       if(result&&typeof result.catch==='function'){
