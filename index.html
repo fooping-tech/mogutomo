@@ -597,7 +597,7 @@
   document.addEventListener('touchstart',()=>{if(soundOn||effectsOn)void activateAudio();},{passive:true});
   document.addEventListener('keydown',()=>{if(soundOn||effectsOn)void activateAudio();});
   function talk(text){
-    const kind=/みーつけ|おはなし/.test(text)?'hello':/ぼくも|ぱくっ！おいしい/.test(text)?'eatVoice':'happyVoice';
+    const kind=/みーつけ|おはなし/.test(text)?'hello':/も ぱくっ|ぼくも|ぱくっ！おいしい/.test(text)?'eatVoice':'happyVoice';
     void playSound(kind,'voice');
   }
   function say(text, speak=true){ saying.textContent=text; if(speak) talk(text); }
