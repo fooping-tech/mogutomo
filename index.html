@@ -361,6 +361,14 @@
     @keyframes idleWing{0%,100%{transform:rotate(-30deg)}44%{transform:rotate(-52deg) translate(-4px,-4px)}}
     .stage.collection-complete:before{background:radial-gradient(circle,#FFF8B0 5%,#F9BFF3 60%,#CFBCFF);box-shadow:0 0 28px #E2B1FF}
     .stage.collection-complete .decor{color:#AD8BF5}
+
+    .celebration-wash{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:0;
+      background:radial-gradient(ellipse at 50% 43%,#FFF2A5 0%,#FFDAE1 27%,#F2D9FF88 58%,transparent 78%)}
+    .celebration-wash.soft{animation:screenWash .52s ease-out both}
+    .celebration-wash.big{animation:screenWashBig .92s ease-out both}
+    @keyframes screenWash{0%,100%{opacity:0}25%{opacity:.12}60%{opacity:.07}}
+    @keyframes screenWashBig{0%,100%{opacity:0}30%{opacity:.28}66%{opacity:.16}}
+    @media(prefers-reduced-motion:reduce){.celebration-wash.soft,.celebration-wash.big{animation:none;opacity:0}}
   </style>
 </head>
 <body>
@@ -479,6 +487,7 @@
   <p class="privacy">📱 映像は端末内で解析し、録画・アップロードしません。<br>「ぱくっ」は口の開閉からの推定で、飲み込みを確認するものではありません。<br>カメラは HTTPS で利用できます。最初はAIモデルの読み込みが必要です。</p>
   <div class="toast" id="toast" role="alert"></div>
 </main>
+<div id="celebrationWash" class="celebration-wash" aria-hidden="true"></div>
 <script>
 (() => {
   'use strict';
@@ -508,7 +517,7 @@
   // A combo counts actions in this visit only. There is no timer, speed bonus or penalty.
   const COMBO_MARKS=[{count:3,label:'NICE!',tone:'comboNice'},{count:5,label:'GREAT!',tone:'comboGreat'},{count:10,label:'SUPER FEVER!',tone:'comboFever'}];
   let sessionBites=0,achievements=[],volume=.6,lowQuality=false,settingsVisible=false;
-  let impactTimer=null,petTimer=null,badgeTimer=null,idleTimer=null;
+  let impactTimer=null,petTimer=null,badgeTimer=null,idleTimer=null,washTimer=null;
   const preferReduced=()=>!!window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   function refreshPerformance(){
     lowQuality=preferReduced()||((navigator.hardwareConcurrency||8)<=4)||((navigator.deviceMemory||8)<=4)||frameAvgMs>60;
@@ -530,6 +539,14 @@
     if(badgeTimer)clearTimeout(badgeTimer);
     badgeTimer=setTimeout(()=>el.classList.remove('active'),1450);
   }
+  function flashScreen(strong=false){
+    if(preferReduced()||(lowQuality&&!strong))return;
+    const wash=$('celebrationWash');
+    if(washTimer)clearTimeout(washTimer);
+    wash.classList.remove('soft','big');void wash.offsetWidth;
+    wash.classList.add(strong?'big':'soft');
+    washTimer=setTimeout(()=>wash.classList.remove('soft','big'),1000);
+  }
   function instantFeedback(){
     // Start visuals immediately, before persistence, list rendering or WAV synthesis.
     if(impactTimer)clearTimeout(impactTimer);
@@ -538,7 +555,7 @@
       runAnimation(ring,'active');runAnimation(stage,'impact');
       impactTimer=setTimeout(()=>{ring.classList.remove('active');stage.classList.remove('impact');},600);
     }
-    celebrate();sparkle();
+    celebrate();sparkle();flashScreen();
   }
   function comboAfterBite(){
     sessionBites++;
@@ -548,12 +565,13 @@
       recordEvent('combo_'+sessionBites);
       showScreenBadge(mark.label);
       showConfetti(sessionBites>=10?55:sessionBites>=5?30:18);
+      flashScreen(true);
       return mark.tone;
     }
     if(sessionBites>=10&&sessionBites%5===0){
       recordEvent('fever_'+sessionBites);
       showScreenBadge('✨ FEVER × '+sessionBites);
-      showConfetti(38);
+      showConfetti(38);flashScreen(true);
       return 'comboFever';
     }
     return '';
@@ -629,7 +647,7 @@
     if(evolveTimer)clearTimeout(evolveTimer);
     runAnimation(buddy,'evolving');
     stage.classList.add('evolution-light');
-    showConfetti(32);
+    showConfetti(32);flashScreen(true);
     evolveTimer=setTimeout(()=>{
       buddy.classList.remove('evolving');
       stage.classList.remove('evolution-light');
