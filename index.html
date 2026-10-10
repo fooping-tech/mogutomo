@@ -402,6 +402,33 @@
     .roster-card .growth-toolbar{margin-top:5px}
     .roster-card #collectionHint{margin:5px 0 0}
     @media(max-height:740px){.growth-card{padding:7px 11px 5px}.roster-card{padding:0 10px 4px}}
+
+    /* Camera replaces the action buttons in normal page flow, below the character. */
+    .camera-session[hidden],.camera-manual-button[hidden]{display:none!important}
+    .camera-session{width:100%;min-width:0;position:relative}
+    .app.camera-active .controls{grid-template-columns:minmax(0,1fr)}
+    .app.camera-active .controls>.action{display:none}
+    .camera-session .preview{
+      position:relative;inset:auto;margin:0;width:100%;height:clamp(190px,29svh,255px);
+      border-radius:20px;border:3px solid #FFFDF8;box-shadow:0 4px 0 #E4CBBC,0 9px 24px #7956492A;
+      transform:none;z-index:1;isolation:isolate;
+      transition:height .23s ease,box-shadow .23s ease;
+    }
+    .camera-session .preview.expanded{
+      position:relative;inset:auto;transform:none;width:100%;height:clamp(260px,47svh,390px);
+      border-radius:20px;z-index:1;
+    }
+    .camera-session .preview .detection-state{font-size:12px;bottom:35px;padding:7px 4px}
+    .camera-session .preview .detection-chips{bottom:6px;gap:7px;max-width:240px;margin:0 auto}
+    .camera-session .preview .detection-chips span{font-size:11px;padding:5px 3px}
+    .camera-session .preview .preview-top{top:9px;left:9px;right:9px}
+    .camera-session .preview .live{font-size:11px;padding:5px 9px}
+    .camera-session .preview .expand-preview{min-height:32px;min-width:36px;font-size:17px}
+    .camera-manual-button{
+      display:block;width:100%;min-height:41px;margin-top:10px;border:1px solid #F0CBB8;
+      color:#9A6252;background:#FFF7EF;border-radius:14px;font-size:14px;font-weight:900;
+    }
+    @media(prefers-reduced-motion:reduce){.camera-session .preview{transition:none}}
   </style>
 </head>
 <body>
@@ -449,14 +476,6 @@
         <div class="cheek left"></div><div class="cheek right"></div>
         <div class="mouth"></div><div class="evo-tail" aria-hidden="true"></div><div class="evo-wing" aria-hidden="true"></div><div class="evo-cape" aria-hidden="true"></div><div class="evo-shell" aria-hidden="true"></div><div class="food-emoji" aria-hidden="true">🥕</div>
       </div>
-      <div class="preview" id="preview" aria-label="ライブカメラの検出状態">
-        <video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video>
-        <canvas id="detectionCanvas" class="detection-canvas" aria-hidden="true"></canvas>
-        <div class="preview-top"><span class="live">● LIVE</span><button id="expandPreview" class="expand-preview" type="button" aria-label="カメラ映像を拡大" aria-pressed="false">⤢</button></div>
-        <span id="detectionState" class="detection-state" data-state="search" role="status" aria-live="polite">👀 かおをさがすよ</span>
-        <div class="detection-chips" aria-hidden="true"><span id="faceChip">顔 ・</span><span id="mouthChip">口 ・</span></div>
-        <div id="cameraBiteEffect" class="camera-bite-effect" aria-hidden="true"><span class="burst one">✨</span><span class="burst two">🌟</span><span class="bite-label" id="cameraBiteLabel">ぱくっ！</span><span class="burst three">💛</span></div>
-      </div>
       <div class="hearts" id="hearts" aria-hidden="true">
         <span class="heart" style="--hx:-58px;--hy:-6px">💖</span>
         <span class="heart" style="--hx:-18px;--hy:-30px">💕</span>
@@ -473,6 +492,17 @@
   <section class="controls" aria-label="ごはんの操作">
     <button id="eatTogether" class="action secondary" type="button"><span class="emoji" aria-hidden="true">🥄</span><span class="large">いっしょに ぱくっ</span><span class="small">もぐちゃんも たべるよ</span></button>
     <button id="ateButton" class="action primary" type="button"><span class="emoji" aria-hidden="true">🎉</span><span class="large">たべたよ！</span><span class="small">タップで ほめてもらおう</span></button>
+    <div id="cameraSession" class="camera-session" hidden aria-label="ライブカメラ">
+      <div class="preview" id="preview" aria-label="ライブカメラの検出状態">
+        <video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video>
+        <canvas id="detectionCanvas" class="detection-canvas" aria-hidden="true"></canvas>
+        <div class="preview-top"><span class="live">● LIVE</span><button id="expandPreview" class="expand-preview" type="button" aria-label="カメラ映像を拡大" aria-pressed="false">⤢</button></div>
+        <span id="detectionState" class="detection-state" data-state="search" role="status" aria-live="polite">👀 かおをさがすよ</span>
+        <div class="detection-chips" aria-hidden="true"><span id="faceChip">顔 ・</span><span id="mouthChip">口 ・</span></div>
+        <div id="cameraBiteEffect" class="camera-bite-effect" aria-hidden="true"><span class="burst one">✨</span><span class="burst two">🌟</span><span class="bite-label" id="cameraBiteLabel">ぱくっ！</span><span class="burst three">💛</span></div>
+      </div>
+      <button id="manualFallback" class="camera-manual-button" type="button" hidden>🎉 手動でほめる</button>
+    </div>
   </section>
   <section class="camera-row" aria-label="カメラ設定">
     <div class="camera-symbol" aria-hidden="true">📷</div>
@@ -533,6 +563,7 @@
   const stage = $('stage'), hearts = $('hearts');
   const cameraButton = $('cameraButton'), preview = $('preview'), voiceButton = $('voiceButton'), effectsButton = $('effectsButton'), toast = $('toast');
   const cameraError = $('cameraError'), cameraErrorText = $('cameraErrorText');
+  const cameraSession=$('cameraSession'), manualFallback=$('manualFallback');
   const detectionCanvas = $('detectionCanvas'), detectionState = $('detectionState');
   const faceChip = $('faceChip'), mouthChip = $('mouthChip'), cameraBiteEffect = $('cameraBiteEffect');
   const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
@@ -1304,12 +1335,24 @@
     const name=error?.name||'Error',message=error?.message||String(error||'詳細不明');
     cameraErrorText.textContent=`${phase}\n${name}: ${message}\nブラウザ: ${navigator.userAgent}`;
   }
+  function updateCameraLayout(active,manual=false){
+    $('app').classList.toggle('camera-active',!!active);
+    cameraSession.hidden=!active;
+    manualFallback.hidden=!(active&&manual);
+    if(!active){
+      preview.classList.remove('expanded');
+      $('expandPreview').setAttribute('aria-pressed','false');
+      $('expandPreview').setAttribute('aria-label','カメラ映像を拡大');
+      $('expandPreview').textContent='⤢';
+    }
+  }
   function stopCamera(showMessage=true){
     requestId++;
     if(frameId!==null){cancelAnimationFrame(frameId);frameId=null;}
     if(stream){stream.getTracks().forEach(track=>track.stop());stream=null;}
     resetDetection();
     video.pause(); video.srcObject=null; preview.classList.remove('visible');
+    updateCameraLayout(false);
     cameraButton.textContent='カメラ ON'; cameraButton.disabled=false;
     $('cameraDescription').textContent='おくちを おおきく あけて とじると はんのうするよ';
     faceVisible=false;lastFaceTime=0;resetGesture();look();starting=false;
@@ -1355,6 +1398,7 @@
         faceVisible=false; resetGesture(); look();
         clearDetectionCanvas(); detectionStatus('error');
         status('映像は映るよ。AI解析が止まったので手動で遊んでね。','busy');
+        updateCameraLayout(true,true);
         $('cameraDescription').textContent='映像は表示中。AIを再試行するにはカメラをOFF→ON';
         return;
       }
@@ -1397,6 +1441,7 @@
       await video.play();
       if(runId!==requestId)return;
       preview.classList.add('visible');
+      updateCameraLayout(true,false);
       cameraButton.textContent='カメラ OFF';cameraButton.disabled=false;
       status('カメラはOK！ おめめを準備するね…','busy');
       detectionStatus('loading');
@@ -1419,6 +1464,7 @@
       }
       if(runId!==requestId)return;
       cameraButton.textContent='カメラ OFF';cameraButton.disabled=false;
+      updateCameraLayout(true,false);
       $('cameraDescription').textContent='おくちを おおきく あけて とじると ぱくっ！';
       status('おかおを さがしてるよ 👀','busy');
       lastInference=0;helloSaid=false;resetGesture();
@@ -1429,6 +1475,7 @@
       faceLandmarker=null;
       showCameraIssue('AIモデルの取得・初期化',e);
       status('カメラはOK。AIの読み込みに失敗したよ','busy');
+      updateCameraLayout(true,true);
       detectionStatus('error');
       $('cameraDescription').textContent='映像は表示中。AIを再試行するにはカメラをOFF→ON';
       showToast('カメラは使えます。AIモデルの通信に失敗しました。詳細を確認してね。');
@@ -1446,6 +1493,7 @@
     clearDetectionCanvas();
   });
   $('ateButton').addEventListener('click',()=>praise('manual'));
+  manualFallback.addEventListener('click',()=>praise('manual'));
   $('eatTogether').addEventListener('click',()=>munch(true));
   voiceButton.addEventListener('click',()=>{
     soundOn=!soundOn;
