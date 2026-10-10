@@ -92,6 +92,17 @@ node --test tests/smoke.test.cjs
 
 **iPhone Safari実機で別途確認が必要**：カメラ権限、MediaPipe/WASMの読み込み、実際の口の認識精度、音声出力先と消音モード、体感遅延、フレームレート。単体テストだけでは実機動作を保証できません。
 
+## SNSリンクプレビュー（OGP / X Card）
+
+SNS用の共有リンク（古いプレビューキャッシュを避けるバージョン付き）：
+
+**https://fooping-tech.github.io/mogutomo/?share=20261010b**
+
+- ページ上部にOpen Graph / X Card（`summary_large_image`）メタデータを静的HTMLとして埋め込んでいます。SNSのクローラーはJavaScriptを実行しなくても読み取れます
+- プレビュー画像はルートの `og-image.png`（1200×630px、PNG）で、SNS向けURLにはキャッシュ更新用 `?card=20261010b` を付けています
+- 既に投稿されたURLのプレビューはSNS側にキャッシュされ、タグ修正後も変化しない場合があります。新規投稿では上記のバージョン付きリンクを使用してください
+- `node --test tests/smoke.test.cjs` でOGP/X Cardの整合性を検証できます。SNS実サービスによるクローラー取得やカード表示は別途実機で確認する必要があります
+
 ## 起動方法
 
 カメラを利用するには HTTPS 配信が必要です（`localhost` でも可）。`index.html` の静的公開で動きます。
