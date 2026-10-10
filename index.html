@@ -87,6 +87,31 @@
     .preview.visible {display:block}
     .preview video {width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
     .preview .live {position:absolute;top:7px;left:7px;font-size:9px;font-weight:900;color:white;background:#E65D67;padding:4px 6px;border-radius:7px}
+    /* Live preview: video and annotation canvas use identical mirrored cover coordinates. */
+    .preview {width:clamp(132px,36vw,160px);height:clamp(170px,46vw,205px);border-radius:18px;bottom:4%;right:4%;isolation:isolate;transition:width .2s,height .2s,transform .2s}
+    .preview.expanded {width:min(78vw,258px);height:min(65svh,325px);box-shadow:0 7px 28px #4A2F3990;z-index:25}
+    .preview .detection-canvas {position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none;z-index:2}
+    .preview .preview-top{position:absolute;top:6px;left:6px;right:6px;z-index:6;display:flex;align-items:center;justify-content:space-between;gap:4px}
+    .preview .live{position:static;font-size:9px;padding:4px 5px;background:#D84F5D}
+    .preview .expand-preview {border:1px solid #ffffffb0;background:#332B2EB0;color:white;border-radius:7px;font-size:14px;min-width:28px;min-height:25px;line-height:1}
+    .preview .detection-state {position:absolute;left:5px;right:5px;bottom:29px;z-index:5;border-radius:9px;background:#241D22D8;color:white;text-align:center;font-weight:900;font-size:11px;padding:6px 3px;text-shadow:0 1px 2px #111;line-height:1.3;pointer-events:none}
+    .preview .detection-state[data-state="face"],.preview .detection-state[data-state="hand"]{background:#18654CCF}
+    .preview .detection-state[data-state="near"]{background:#B36F1FE8}
+    .preview .detection-state[data-state="bite"]{background:#E56B62EE}
+    .preview .detection-state[data-state="error"]{background:#8E4D53DC}
+    .preview .detection-chips{position:absolute;z-index:5;bottom:5px;left:5px;right:5px;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:none}
+    .preview .detection-chips span{font-size:10px;flex:1;min-width:0;background:#322A31CB;color:#E7E2E2;text-align:center;border-radius:6px;font-weight:850;padding:4px 2px}
+    .preview .detection-chips span.detected{background:#23855AE8;color:white}
+    .preview .camera-bite-effect {position:absolute;inset:0;z-index:4;display:grid;place-items:center;opacity:0;pointer-events:none;background:radial-gradient(ellipse,#FFE28188,transparent 74%);transform:scale(.75)}
+    .preview .camera-bite-effect.active {animation:cameraBiteFlash 1.25s ease-out forwards}
+    .preview .camera-bite-effect .bite-label{background:#FFF9EDEE;color:#CC5E4B;padding:7px 8px;border-radius:999px;border:2px solid white;box-shadow:0 2px 12px #E96D67A0;font-size:clamp(13px,3.9vw,19px);font-weight:1000;white-space:nowrap;transform:rotate(-7deg)}
+    .preview .camera-bite-effect .burst{position:absolute;font-size:28px;filter:drop-shadow(0 2px 3px #4B2B3970)}
+    .preview .camera-bite-effect .burst.one{top:18%;left:14%;animation:burstOne 1.15s ease-out both}
+    .preview .camera-bite-effect .burst.two{top:21%;right:8%;animation:burstTwo 1.15s ease-out both}
+    .preview .camera-bite-effect .burst.three{bottom:22%;left:24%;animation:burstOne 1.15s ease-out both}
+    @keyframes cameraBiteFlash{0%{opacity:0;transform:scale(.65)}16%{opacity:1;transform:scale(1.12)}32%{opacity:1;transform:scale(1)}75%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.1)}}
+    @keyframes burstOne{from{transform:translate(8px,20px) scale(.3) rotate(-20deg)}to{transform:translate(-15px,-25px) scale(1.15) rotate(18deg)}}
+    @keyframes burstTwo{from{transform:translate(-7px,18px) scale(.3) rotate(22deg)}to{transform:translate(16px,-26px) scale(1.2) rotate(-20deg)}}
     .sparkle {position:absolute;z-index:20;pointer-events:none;font-size:25px;opacity:0;transform:translateY(10px)}
     .sparkle.active {animation:sparkup .85s ease-out forwards}
     @keyframes sparkup {0%{opacity:0;transform:translateY(10px) scale(.6)}25%{opacity:1}100%{opacity:0;transform:translateY(-65px) scale(1.3)}}
@@ -148,7 +173,14 @@
         <div class="cheek left"></div><div class="cheek right"></div>
         <div class="mouth"></div><div class="food-emoji" aria-hidden="true">🥕</div>
       </div>
-      <div class="preview" id="preview"><video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video><span class="live">● LIVE</span></div>
+      <div class="preview" id="preview" aria-label="ライブカメラの検出状態">
+        <video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video>
+        <canvas id="detectionCanvas" class="detection-canvas" aria-hidden="true"></canvas>
+        <div class="preview-top"><span class="live">● LIVE</span><button id="expandPreview" class="expand-preview" type="button" aria-label="カメラ映像を拡大" aria-pressed="false">⤢</button></div>
+        <span id="detectionState" class="detection-state" data-state="search" role="status" aria-live="polite">👀 かおをさがすよ</span>
+        <div class="detection-chips" aria-hidden="true"><span id="faceChip">顔 ・</span><span id="handChip">手 ・</span></div>
+        <div id="cameraBiteEffect" class="camera-bite-effect" aria-hidden="true"><span class="burst one">✨</span><span class="burst two">🌟</span><span class="bite-label" id="cameraBiteLabel">ぱくっ！</span><span class="burst three">💛</span></div>
+      </div>
       <div class="hearts" id="hearts" aria-hidden="true">
         <span class="heart" style="--hx:-58px;--hy:-6px">💖</span>
         <span class="heart" style="--hx:-18px;--hy:-30px">💕</span>
@@ -191,6 +223,8 @@
   const stage = $('stage'), hearts = $('hearts');
   const cameraButton = $('cameraButton'), preview = $('preview'), voiceButton = $('voiceButton'), effectsButton = $('effectsButton'), toast = $('toast');
   const cameraError = $('cameraError'), cameraErrorText = $('cameraErrorText');
+  const detectionCanvas = $('detectionCanvas'), detectionState = $('detectionState');
+  const faceChip = $('faceChip'), handChip = $('handChip'), cameraBiteEffect = $('cameraBiteEffect');
   const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
   const distance = (a,b,w=1,h=1) => Math.hypot((a.x-b.x)*w,(a.y-b.y)*h);
   const praiseWords = ['ぱくっ！すてき！✨','おいしそう！よかったね！','もぐもぐ できたね！👏','たべたね！うれしいな！','いっしょに たべると おいしいね！'];
@@ -199,7 +233,7 @@
   let requestId = 0, frameId = null, lastInference = 0, faceVisible = false, lastFaceTime = 0;
   let mealCount = 0, lastPraiseAt = -Infinity, lastInviteAt = performance.now(), lastActionAt = 0, munchTimeout=null, toastTimeout=null, happyTimeout=null;
   let waitingForHandToLeave = false, handEnteredAt = 0, handNearFrames = 0, mouthOpened = false;
-  let helloSaid = false, frameAvgMs=0;
+  let helloSaid = false, frameAvgMs=0, cameraBiteTimeout=null, cameraBiteUntil=0;
 
   // Everything is synthesized on-device, without speech voices or audio downloads.
   // A user gesture unlocks audio on iPhone; retries also handle WebKit's interrupted state.
@@ -397,6 +431,88 @@
     buddy.style.setProperty('--look-x',`${(x*width*.039).toFixed(1)}px`);
     buddy.style.setProperty('--look-y',`${(y*width*.03).toFixed(1)}px`);
   }
+
+  const detectionNames={
+    loading:'⏳ AIじゅんび中',search:'👀 かおをさがすよ',
+    face:'😊 かおを検出',hand:'🖐️ てを検出',
+    near:'🥄 おくちに近づいた！',bite:'✨ ぱくっ！',
+    error:'⚠️ AIはおやすみ'
+  };
+  function detectionStatus(next,face=false,hand=false){
+    // A bite celebration stays visible even if subsequent frames only see the face.
+    if(next!=='bite'&&performance.now()<cameraBiteUntil)return;
+    if(detectionState.dataset.state!==next){
+      detectionState.dataset.state=next;
+      detectionState.textContent=detectionNames[next]||detectionNames.search;
+    }
+    faceChip.classList.toggle('detected',!!face);
+    handChip.classList.toggle('detected',!!hand);
+    faceChip.textContent=face?'顔 ✓':'顔 ・';
+    handChip.textContent=hand?'手 ✓':'手 ・';
+  }
+  function clearDetectionCanvas(){
+    const ctx=detectionCanvas.getContext?.('2d');
+    if(ctx)ctx.clearRect(0,0,detectionCanvas.width,detectionCanvas.height);
+  }
+  function resetDetection(){
+    cameraBiteUntil=0;
+    if(cameraBiteTimeout)clearTimeout(cameraBiteTimeout);
+    cameraBiteTimeout=null;
+    cameraBiteEffect.classList.remove('active');
+    detectionStatus('search');
+    clearDetectionCanvas();
+  }
+  function cameraBiteBurst(source){
+    if(!stream||!preview.classList.contains('visible'))return;
+    cameraBiteUntil=performance.now()+1400;
+    detectionStatus('bite',true,source==='auto');
+    $('cameraBiteLabel').textContent=source==='auto'?'ぱくっ！✨':'やったね！✨';
+    cameraBiteEffect.classList.remove('active');
+    void cameraBiteEffect.offsetWidth;
+    cameraBiteEffect.classList.add('active');
+    if(cameraBiteTimeout)clearTimeout(cameraBiteTimeout);
+    cameraBiteTimeout=setTimeout(()=>{
+      cameraBiteEffect.classList.remove('active');
+      cameraBiteUntil=0;
+    },1450);
+  }
+  function drawDetection(face,hands,near){
+    const ctx=detectionCanvas.getContext?.('2d');
+    if(!ctx)return;
+    const cw=detectionCanvas.clientWidth, ch=detectionCanvas.clientHeight;
+    if(!cw||!ch)return;
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    const bw=Math.round(cw*dpr),bh=Math.round(ch*dpr);
+    if(detectionCanvas.width!==bw||detectionCanvas.height!==bh){
+      detectionCanvas.width=bw; detectionCanvas.height=bh;
+    }
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,cw,ch);
+    if(!face)return;
+    const vw=video.videoWidth||640,vh=video.videoHeight||480;
+    const scale=Math.max(cw/vw,ch/vh), dx=(cw-vw*scale)*.5,dy=(ch-vh*scale)*.5;
+    const project=p=>({x:p.x*vw*scale+dx,y:p.y*vh*scale+dy});
+    const mouth=project({x:(face[13].x+face[14].x)*.5,y:(face[13].y+face[14].y)*.5});
+    const upper=project(face[10]),chin=project(face[152]),left=project(face[234]),right=project(face[454]);
+    const x=(left.x+right.x)*.5,y=(upper.y+chin.y)*.5;
+    const rx=Math.abs(right.x-left.x)*.57,ry=Math.abs(chin.y-upper.y)*.55;
+    ctx.strokeStyle='#72FFD0';ctx.lineWidth=2.3;
+    ctx.setLineDash([5,3]);ctx.beginPath();ctx.ellipse(x,y,Math.max(8,rx),Math.max(10,ry),0,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+    // Mark the mouth and the visible fingertips, not all 478 landmarks.
+    ctx.fillStyle=near?'#FFC86C':'#EFFFF8';
+    ctx.strokeStyle=near?'#FFCF6C':'#21AD78';
+    ctx.lineWidth=2.1;ctx.beginPath();ctx.arc(mouth.x,mouth.y,near?7:4.5,0,Math.PI*2);ctx.fill();ctx.stroke();
+    for(const hand of hands||[]){
+      const fingertips=[4,8,12,16,20].filter(i=>hand[i]);
+      for(const i of fingertips){
+        const point=project(hand[i]);
+        if(point.x<0||point.x>cw||point.y<0||point.y>ch)continue;
+        ctx.fillStyle=near?'#FFCA61':'#81DDFB';
+        ctx.beginPath();ctx.arc(point.x,point.y,2.8,0,Math.PI*2);ctx.fill();
+      }
+    }
+  }
+
   function munch(withSpeech=true){
     if (munchTimeout) clearTimeout(munchTimeout);
     buddy.classList.remove('is-munching'); void buddy.offsetWidth;
@@ -421,6 +537,7 @@
     waitingForHandToLeave=false; handNearFrames=0; mouthOpened=false;
     celebrate();
     sparkle();
+    cameraBiteBurst(source);
     playEffect('praise');
     say(praiseWords[(mealCount-1)%praiseWords.length]);
     if(navigator.vibrate && source==='manual') navigator.vibrate(30);
@@ -513,6 +630,7 @@
     requestId++;
     if(frameId!==null){cancelAnimationFrame(frameId);frameId=null;}
     if(stream){stream.getTracks().forEach(track=>track.stop());stream=null;}
+    resetDetection();
     video.pause(); video.srcObject=null; preview.classList.remove('visible');
     cameraButton.textContent='カメラ ON'; cameraButton.disabled=false;
     $('cameraDescription').textContent='おかおと おくちへのてのうごきを みるよ';
@@ -531,6 +649,7 @@
         // detectForVideo is synchronous; throttle for mobile battery/heat.
         const faces=faceLandmarker.detectForVideo(video,now).faceLandmarks;
         const face=faces?.[0];
+        let hands=[];
         if(face){
           lastFaceTime=now;
           if(!faceVisible){
@@ -541,12 +660,16 @@
           // Preview is mirrored, so reverse horizontal input for the avatar eyes.
           look(clamp((.5-center.x)*2.3,-1,1),clamp((center.y-.48)*2.5,-1,1));
           if(handLandmarker){
-            const hands=handLandmarker.detectForVideo(video,now).landmarks;
+            hands=handLandmarker.detectForVideo(video,now).landmarks||[];
             observeBite(face,hands,now);
           }
+          drawDetection(face,hands,waitingForHandToLeave);
+          detectionStatus(waitingForHandToLeave?'near':hands.length?'hand':'face',true,hands.length>0);
         } else if(now-lastFaceTime>1100){
           if(faceVisible){faceVisible=false;status('おかおを さがしてるよ 👀','busy');}
           resetGesture();look();
+          drawDetection(null,[],false);
+          detectionStatus('search');
         }
         frameAvgMs=frameAvgMs*.85+(performance.now()-start)*.15;
       } catch(e) {
@@ -554,6 +677,7 @@
         showCameraIssue('カメラ映像のAI解析',e);
         faceLandmarker=null; handLandmarker=null;
         faceVisible=false; resetGesture(); look();
+        clearDetectionCanvas(); detectionStatus('error');
         status('映像は映るよ。AI解析が止まったので手動で遊んでね。','busy');
         $('cameraDescription').textContent='映像は表示中。AIを再試行するにはカメラをOFF→ON';
         return;
@@ -569,6 +693,8 @@
     if(starting||stream)return;
     cameraError.hidden=true;
     cameraError.open=false;
+    resetDetection();
+    detectionStatus('loading');
     if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){
       const e=new Error('getUserMedia unavailable or insecure context');
       showCameraIssue('カメラAPIの利用',e);
@@ -597,6 +723,7 @@
       preview.classList.add('visible');
       cameraButton.textContent='カメラ OFF';cameraButton.disabled=false;
       status('カメラはOK！ おめめを準備するね…','busy');
+      detectionStatus('loading');
     }catch(e){
       if(runId!==requestId)return;
       stopCamera(false);
@@ -634,6 +761,7 @@
       faceLandmarker=null;handLandmarker=null;
       showCameraIssue('AIモデルの取得・初期化',e);
       status('カメラはOK。AIの読み込みに失敗したよ','busy');
+      detectionStatus('error');
       $('cameraDescription').textContent='映像は表示中。AIを再試行するにはカメラをOFF→ON';
       showToast('カメラは使えます。AIモデルの通信に失敗しました。詳細を確認してね。');
     }finally{
@@ -641,6 +769,14 @@
     }
   }
   cameraButton.addEventListener('click',()=>{if(stream) stopCamera();else startCamera();});
+  $('expandPreview').addEventListener('click',()=>{
+    const expanded=preview.classList.toggle('expanded');
+    const button=$('expandPreview');
+    button.setAttribute('aria-pressed',String(expanded));
+    button.setAttribute('aria-label',expanded?'カメラ映像を縮小':'カメラ映像を拡大');
+    button.textContent=expanded?'⤡':'⤢';
+    clearDetectionCanvas();
+  });
   $('ateButton').addEventListener('click',()=>praise('manual'));
   $('eatTogether').addEventListener('click',()=>munch(true));
   voiceButton.addEventListener('click',()=>{
