@@ -431,9 +431,9 @@
     @media(prefers-reduced-motion:reduce){.camera-session .preview{transition:none}}
 
     /* Camera-on: one snug stage-and-camera viewport; optional scroll always remains available. */
-    .play-frame{position:relative;scroll-snap-align:start;scroll-snap-stop:normal;scroll-margin-top:90px}
-    html:has(.app.camera-active){scroll-snap-type:y proximity}
-    .app.camera-active .play-frame{scroll-snap-align:start;scroll-snap-stop:always}
+    .play-frame{position:relative;scroll-snap-align:center;scroll-snap-stop:normal;scroll-margin-top:8px}
+    html:has(.app.camera-active){scroll-snap-type:y proximity;scroll-padding-top:90px}
+    .app.camera-active .play-frame{scroll-snap-align:center;scroll-snap-stop:always}
     .app.camera-active .bubble{min-height:39px;margin:3px auto -3px;padding:7px 12px;border-radius:16px}
     .app.camera-active #saying{font-size:clamp(14px,3.8vw,18px)}
     .app.camera-active .stage{height:clamp(160px,25svh,230px)}
@@ -500,7 +500,7 @@
     <h1>いっしょに <span class="pink">ぱくっ！</span></h1>
     <p class="subhead" id="petSubhead">もぐちゃんと たのしく もぐもぐしよう</p>
   </section>
-  <section class="growth-card" aria-label="キャラクターのレベルと経験値">
+  <section class="growth-card" id="growthCard" aria-label="キャラクターのレベルと経験値">
     <div class="growth-top"><span id="levelLabel" class="growth-level">LV.1</span><span id="xpLabel" class="growth-xp">0 / 10 XP</span></div>
     <div id="evolutionStage" class="evolution-caption">🥚 たまごっこ</div><div class="xp-track" role="progressbar" id="xpTrack" aria-label="次のレベルまでの経験値" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><div class="xp-fill" id="xpFill"></div></div>
   </section>
@@ -1398,11 +1398,41 @@
     const name=error?.name||'Error',message=error?.message||String(error||'詳細不明');
     cameraErrorText.textContent=`${phase}\n${name}: ${message}\nブラウザ: ${navigator.userAgent}`;
   }
+  let frameSnapId=null;
+  function snapToCameraFrame(){
+    if(!$('app').classList.contains('camera-active')||typeof window.scrollTo!=='function')return;
+    const frame=$('playFrame').getBoundingClientRect();
+    const viewport=window.visualViewport?.height||window.innerHeight||document.documentElement?.clientHeight||0;
+    if(!Number.isFinite(frame.top)||!Number.isFinite(frame.height)||!viewport)return;
+    const stickyHeight=$('growthCard').getBoundingClientRect()?.height||85;
+    // Center the avatar + live camera in the remaining space below the sticky XP bar.
+    const topPadding=stickyHeight+8;
+    const spare=Math.max(0,viewport-topPadding-frame.height);
+    const target=Math.max(0,(window.scrollY||window.pageYOffset||0)+frame.top-topPadding-spare/2);
+    const current=window.scrollY||window.pageYOffset||0;
+    if(Math.abs(target-current)>8){
+      window.scrollTo({top:Math.round(target),behavior:preferReduced()?'auto':'smooth'});
+    }
+  }
+  function scheduleCameraSnap(){
+    if(typeof window.scrollTo!=='function')return;
+    if(frameSnapId!==null){cancelAnimationFrame(frameSnapId);frameSnapId=null;}
+    // Two frames allow Safari to settle new grid/video sizes before calculating position.
+    frameSnapId=requestAnimationFrame(()=>{
+      frameSnapId=requestAnimationFrame(()=>{
+        frameSnapId=null;
+        snapToCameraFrame();
+      });
+    });
+  }
   function updateCameraLayout(active,manual=false){
+    const previouslyActive=$('app').classList.contains('camera-active');
     $('app').classList.toggle('camera-active',!!active);
     cameraSession.hidden=!active;
     manualFallback.hidden=!(active&&manual);
+    if(active && !previouslyActive)scheduleCameraSnap();
     if(!active){
+      if(frameSnapId!==null){cancelAnimationFrame(frameSnapId);frameSnapId=null;}
       preview.classList.remove('expanded');
       $('expandPreview').setAttribute('aria-pressed','false');
       $('expandPreview').setAttribute('aria-label','カメラ映像を拡大');
@@ -1462,6 +1492,7 @@
         clearDetectionCanvas(); detectionStatus('error');
         status('映像は映るよ。AI解析が止まったので手動で遊んでね。','busy');
         updateCameraLayout(true,true);
+        scheduleCameraSnap();
         $('cameraDescription').textContent='映像は表示中。AIを再試行するにはカメラをOFF→ON';
         return;
       }
@@ -1539,6 +1570,7 @@
       showCameraIssue('AIモデルの取得・初期化',e);
       status('カメラはOK。AIの読み込みに失敗したよ','busy');
       updateCameraLayout(true,true);
+      scheduleCameraSnap();
       detectionStatus('error');
       $('cameraDescription').textContent='映像は表示中。AIを再試行するにはカメラをOFF→ON';
       showToast('カメラは使えます。AIモデルの通信に失敗しました。詳細を確認してね。');
@@ -1554,6 +1586,7 @@
     button.setAttribute('aria-label',expanded?'カメラ映像を縮小':'カメラ映像を拡大');
     button.textContent=expanded?'⤡':'⤢';
     clearDetectionCanvas();
+    scheduleCameraSnap();
   });
   $('ateButton').addEventListener('click',()=>praise('manual'));
   manualFallback.addEventListener('click',()=>praise('manual'));
