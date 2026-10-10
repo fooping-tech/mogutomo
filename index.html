@@ -541,13 +541,12 @@
       recordEvent('combo_'+sessionBites);
       showScreenBadge(mark.label);
       showConfetti(sessionBites>=10?55:sessionBites>=5?30:18);
-      playEffect(mark.tone);
       return mark.tone;
     }
     if(sessionBites>=10&&sessionBites%5===0){
       recordEvent('fever_'+sessionBites);
       showScreenBadge('✨ FEVER × '+sessionBites);
-      showConfetti(38);playEffect('comboFever');
+      showConfetti(38);
       return 'comboFever';
     }
     return '';
@@ -1099,16 +1098,29 @@
   function praise(source){
     const now=performance.now();
     if(source==='auto' && (now-lastPraiseAt < 8500 || !$('autoPraise').checked)) return false;
+    // Critical path: always start animation first, while the gesture feels immediate.
+    instantFeedback();
+    cameraBiteBurst(source);
     mealCount++;
     lastPraiseAt=now; lastActionAt=now; lastInviteAt=now;
     resetGesture();
     const result=rewardBite();
-    celebrate();
-    sparkle();
-    cameraBiteBurst(source);
-    playEffect(result.unlocked?'secret':result.evolved?'evolve':result.leveled?'levelUp':'praise');
-    if(!result.unlocked) say(currentPet().name+'：'+praiseWords[(mealCount-1)%praiseWords.length]);
-    if(navigator.vibrate && source==='manual') navigator.vibrate(30);
+    const milestone=comboAfterBite();
+    const rare=(petBites[selectedPet] + selectedPet*7)%13===0;
+    if(mealCount===1)recordEvent('first_bite');
+    if(rare){
+      showScreenBadge('✨ ひみつのリアクション！');
+      recordEvent('rare_reaction_'+selectedPet);
+      showConfetti(24);
+    }else if(!result.leveled&&!milestone)showConfetti(sessionBites>=10?17:10);
+    const tone=result.unlocked?'secret':result.evolved?'evolve':result.leveled?'levelUp':milestone||'praise';
+    playEffect(tone);
+    if(!result.unlocked){
+      say(currentPet().name+'：'+praiseWords[(mealCount-1)%praiseWords.length],false);
+      void playSound(rare?'rareVoice':'happyVoice','voice');
+    }
+    if(navigator.vibrate && source==='manual' && !preferReduced()) navigator.vibrate(20);
+    saveGrowth();
     return true;
   }
   function resetGesture(){
@@ -1237,6 +1249,7 @@
           detectionStatus('search');
         }
         frameAvgMs=frameAvgMs*.85+(performance.now()-start)*.15;
+        if(frameAvgMs>65&&!lowQuality)refreshPerformance();
       } catch(e) {
         // Keep the camera preview usable when only face analysis fails.
         showCameraIssue('カメラ映像のAI解析',e);
@@ -1337,16 +1350,15 @@
   $('ateButton').addEventListener('click',()=>praise('manual'));
   $('eatTogether').addEventListener('click',()=>munch(true));
   voiceButton.addEventListener('click',()=>{
-    soundOn=!soundOn; voiceButton.setAttribute('aria-pressed',String(soundOn));
+    soundOn=!soundOn;
     voiceButton.setAttribute('aria-label',soundOn?'鳴き声をオフにする':'鳴き声をオンにする');
-    voiceButton.textContent=soundOn?'🔊':'🔇';
+    renderSettings();saveGrowth();
     if(soundOn) talk('おはなし するね！');
   });
   effectsButton.addEventListener('click',()=>{
     effectsOn=!effectsOn;
-    effectsButton.setAttribute('aria-pressed',String(effectsOn));
     effectsButton.setAttribute('aria-label',effectsOn?'効果音をオフにする':'効果音をオンにする');
-    effectsButton.textContent=effectsOn?'🎵':'🔕';
+    renderSettings();saveGrowth();
     if(effectsOn) playEffect('enabled');
   });
   $('testSoundButton').addEventListener('click',()=>{
@@ -1354,12 +1366,42 @@
     if(soundOn) void playSound('happyVoice','voice');
     if(effectsOn) void playSound('praise','effects');
   });
-  $('autoPraise').addEventListener('change',()=>{resetGesture();showToast($('autoPraise').checked?'じどうで ほめるよ！':'タップしたときだけ ほめるよ！');});
+  $('autoPraise').addEventListener('change',()=>{
+    resetGesture();renderSettings();saveGrowth();
+    showToast($('autoPraise').checked?'おくちの開閉で ほめるよ！':'タップしたときだけ ほめるよ！');
+  });
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden){if(stream)stopCamera(false);}
   });
   window.addEventListener('pagehide',()=>{if(stream)stopCamera(false);});
 
+  $('openSettings').addEventListener('click',openSettings);
+  $('closeSettings').addEventListener('click',closeSettings);
+  $('settingsOverlay').addEventListener('click',event=>{if(event.target===$('settingsOverlay'))closeSettings();});
+  $('settingsVoice').addEventListener('change',()=>{
+    soundOn=$('settingsVoice').checked;renderSettings();saveGrowth();
+    if(soundOn)void playSound('hello','voice');
+  });
+  $('settingsEffects').addEventListener('change',()=>{
+    effectsOn=$('settingsEffects').checked;renderSettings();saveGrowth();
+    if(effectsOn)playEffect('enabled');
+  });
+  $('settingsAuto').addEventListener('change',()=>{
+    $('autoPraise').checked=$('settingsAuto').checked;
+    resetGesture();renderSettings();saveGrowth();
+  });
+  $('settingsVolume').addEventListener('input',()=>{
+    volume=clamp(Number($('settingsVolume').value)/100,0,1);
+    $('volumeValue').textContent=Math.round(volume*100)+'%';
+    saveGrowth();
+  });
+  $('showHelp').addEventListener('click',()=>{closeSettings();presentWelcome();});
+  $('startPlaying').addEventListener('click',()=>{
+    $('welcomeOverlay').hidden=true;
+    try{localStorage.setItem('mogutomo_intro_v1','1');}catch(e){}
+    void playSound('hello','voice');
+  });
+  document.addEventListener('keydown',event=>{if(event.key==='Escape')closeSettings();});
   $('openDex').addEventListener('click',showDex);
   $('closeDex').addEventListener('click',hideDex);
   $('dexOverlay').addEventListener('click',event=>{if(event.target===$('dexOverlay'))hideDex();});
@@ -1379,6 +1421,7 @@
     if(!window.confirm('6体すべてのレベル・経験値・ひみつのキャラ・ぱくっ回数を最初からにします。元には戻せません。リセットしますか？'))return;
     petXP=[0,0,0,0,0,0];petBites=[0,0,0,0,0,0];
     mealCount=0;selectedPet=0;secretUnlocked=false;lastPraiseAt=-Infinity;
+    sessionBites=0;achievements=[];refreshCombo();
     if(xpTimer)clearTimeout(xpTimer);
     if(levelTimer)clearTimeout(levelTimer);
     if(evolveTimer)clearTimeout(evolveTimer);
@@ -1403,12 +1446,18 @@
     if(Math.abs(dx)>=38 && Math.abs(dx)>Math.abs(dy)*1.25)switchPet(dx<0?1:-1);
   },{passive:true});
   buddy.addEventListener('pointercancel',()=>{swipeStart=null;});
-  // Restore per-character progress from this browser only; camera works without it.
+  // Preserve older saves; show the tutorial only to genuinely new visitors.
+  let hadSave=false;
+  try{hadSave=!!localStorage.getItem(SAVE_KEY)||!!localStorage.getItem('mogutomo_intro_v1');}catch(e){}
   loadGrowth();
   renderPet();
+  renderSettings();
+  refreshCombo();
+  refreshPerformance();
   saying.textContent=currentPet().intro;
   saveGrowth();
   look();
+  if(!hadSave)presentWelcome();
 })();
 </script>
 </body>
