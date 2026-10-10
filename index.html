@@ -557,6 +557,19 @@
     .pet-label span,.small,.settings-note{letter-spacing:0}
     @media(prefers-reduced-motion:reduce){.voxel-canvas{transition:none}}
 
+
+    /* Sharp, tile-based particles and blocky FEVER ambience. */
+    .heart{font-family:ui-monospace,monospace;font-weight:1000;color:#FF6398;
+      font-size:29px;text-shadow:3px 0 #5A4263,0 3px #5A4263,-3px 0 #5A4263,0 -3px #5A4263}
+    .heart:nth-child(2){color:#FFB073}
+    .sparkle{font-weight:1000;color:#FFF1A0;text-shadow:3px 3px #614673, -2px -2px #614673}
+    .stage.fever-mode:before{border-style:dashed;border-color:#A768A1;
+      background:repeating-linear-gradient(90deg,#F6BCDA 0 20px,#E2D0FD 20px 40px,#FFE5AD 40px 60px)!important;
+      animation:pixelFever 3s steps(3,end) infinite}
+    @keyframes pixelFever{50%{filter:hue-rotate(32deg)}}
+    .xp-pop{font-family:ui-monospace,monospace;text-shadow:3px 3px #604262}
+    .camera-side .detection-state,.camera-side-chip{box-shadow:3px 3px 0 #51415955}
+    @media(prefers-reduced-motion:reduce){.stage.fever-mode:before{animation:none}}
   </style>
 </head>
 <body>
@@ -601,15 +614,15 @@
         <div class="food-emoji" aria-hidden="true">🥕</div>
       </div>
       <div class="hearts" id="hearts" aria-hidden="true">
-        <span class="heart" style="--hx:-58px;--hy:-6px">💖</span>
-        <span class="heart" style="--hx:-18px;--hy:-30px">💕</span>
-        <span class="heart" style="--hx:22px;--hy:-22px">✨</span>
-        <span class="heart" style="--hx:58px;--hy:-2px">💛</span>
+        <span class="heart" style="--hx:-58px;--hy:-6px">♥</span>
+        <span class="heart" style="--hx:-18px;--hy:-30px">♥</span>
+        <span class="heart" style="--hx:22px;--hy:-22px">✦</span>
+        <span class="heart" style="--hx:58px;--hy:-2px">◆</span>
       </div>
-      <span class="sparkle" style="left:12%;top:30%" aria-hidden="true">✨</span>
-      <span class="sparkle" style="right:16%;top:15%" aria-hidden="true">⭐</span>
-      <span class="sparkle" style="left:31%;bottom:14%" aria-hidden="true">💛</span>
-      <span class="sparkle" style="right:20%;bottom:19%" aria-hidden="true">✨</span>
+      <span class="sparkle" style="left:12%;top:30%" aria-hidden="true">✦</span>
+      <span class="sparkle" style="right:16%;top:15%" aria-hidden="true">✦</span>
+      <span class="sparkle" style="left:31%;bottom:14%" aria-hidden="true">◆</span>
+      <span class="sparkle" style="right:20%;bottom:19%" aria-hidden="true">✦</span>
     </div>
   </section>
   <div class="status"><div id="statusPill" class="status-pill"><span class="status-dot"></span><span id="statusText">カメラをつけると めが あうよ 👀</span></div></div>
@@ -626,7 +639,7 @@
           <video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video>
           <canvas id="detectionCanvas" class="detection-canvas" aria-hidden="true"></canvas>
           <div class="preview-top"><span class="live">● LIVE</span><div class="preview-actions"><button id="expandPreview" class="expand-preview" type="button" aria-label="カメラ映像を拡大" aria-pressed="false">⤢</button><button id="cameraStopInline" class="expand-preview camera-stop-inline" type="button" aria-label="カメラをOFFにする">✕</button></div></div>
-          <div id="cameraBiteEffect" class="camera-bite-effect" aria-hidden="true"><span class="burst one">✨</span><span class="burst two">🌟</span><span class="bite-label" id="cameraBiteLabel">ぱくっ！</span><span class="burst three">💛</span></div>
+          <div id="cameraBiteEffect" class="camera-bite-effect" aria-hidden="true"><span class="burst one">✦</span><span class="burst two">🌟</span><span class="bite-label" id="cameraBiteLabel">ぱくっ！</span><span class="burst three">◆</span></div>
         </div>
         <div class="camera-side camera-side-right" aria-label="口の認識状態">
           <span id="mouthChip" class="camera-side-chip">口 ・</span>
@@ -1053,7 +1066,7 @@
     if(stageIndex>=3 && species==='rabbit'){
       add(-extent,faceY+1,2,cheek);add(extent,faceY+1,2,cheek);
     }
-    return {cells,stageIndex,faceY,eyeX,extent,unit:stageIndex===0?20:stageIndex===4?17:19};
+    return {cells,stageIndex,faceY,eyeX,extent,unit:stageIndex===0?32:stageIndex===1?26:stageIndex===4?18:22};
   }
   function tintVoxel(hex,amount){
     if(!/^#[0-9A-Fa-f]{6}$/.test(hex))return hex;
@@ -1067,7 +1080,9 @@
     if(!ctx||typeof ctx.moveTo!=='function')return false;
     const lv=levelFor(petXP[selectedPet]);
     const shape=buildVoxelPet(currentPet().species,lv);
-    const size=360,u=shape.unit,originY=stageFor(lv).id==='seed'?106:96;
+    const size=360,u=shape.unit,ys=[...shape.cells.values()].map(v=>v.y);
+    const minY=Math.min(...ys),maxY=Math.max(...ys);
+    const originY=Math.round((size-(maxY-minY+1)*u)/2-minY*u+u*.18);
     ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,size,size);
     const xy=(x,y,z)=>[Math.round(180+x*u+z*u*.38),Math.round(originY+y*u-z*u*.28)];
     const poly=(points,color)=>{
@@ -1114,7 +1129,7 @@
     const collectionCount=secretUnlocked?6:5;
     const palette=['--fur-start','--fur-end','--fur-border','--ear-inside','--belly-color','--cheek-color','--arm-color','--foot-color'];
     pet.colors.forEach((value,i)=>buddy.style.setProperty(palette[i],value));
-    buddy.style.setProperty('--growth',(evo.scale+(lv-evo.start)*.018).toFixed(3));
+    buddy.style.setProperty('--growth',(Math.max(.78,evo.scale+(lv-evo.start)*.018)).toFixed(3));
     drawVoxelCharacter();
     buddy.dataset.stage=evo.id;
     $('evolutionStage').textContent=evo.name+' ・ '+voiceNames[selectedPet];
