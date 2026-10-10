@@ -159,6 +159,64 @@
     .toast.shown {transform:translateX(-50%) translateY(0);opacity:1}
     @media (max-height:740px) { .app{padding-top:10px}.intro{margin-top:6px}.bubble{margin-top:10px}.stage{height:clamp(230px,34svh,280px)}.status{margin-bottom:9px}.controls .action{min-height:75px}.camera-row{margin-top:12px}.bottom-meta{margin-top:13px}}
     @media (prefers-reduced-motion:reduce) {*,*:before,*:after{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+
+    /* Character collection and growth. Each character sets its own CSS palette. */
+    .pet-panel{max-width:440px;margin:12px auto 2px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 4px;position:relative;z-index:4}
+    .pet-nav{flex-shrink:0;border:2px solid #E9D2C5;background:#FFFDF8;border-radius:50%;width:43px;height:43px;color:#946351;font-size:26px;font-weight:900;box-shadow:0 3px 0 #EEDACD}
+    .pet-label{min-width:0;flex:1;text-align:center;font-weight:900}
+    .pet-label strong{font-size:19px;display:block;line-height:1.25}
+    .pet-label span{display:block;color:#AD877B;font-size:11px;margin-top:3px}
+    .pet-label .secret-label{color:#8868CD}
+    #buddy{--fur-start:#FFB8A6;--fur-end:#FF9287;--fur-border:#D98272;--ear-inside:#FFDBCF;--belly-color:#FFEEE2;--cheek-color:#F56D6D;--arm-color:#FFA598;--foot-color:#F98C84;--growth:1;touch-action:pan-y}
+    .buddy .ear{background:var(--fur-start);border-color:var(--fur-border)}
+    .buddy .ear:before{background:var(--ear-inside)}
+    .buddy .body{background:linear-gradient(150deg,var(--fur-start),var(--fur-end) 80%);border-color:var(--fur-border)}
+    .buddy .belly{background:var(--belly-color)}
+    .buddy .cheek{background:var(--cheek-color)}
+    .buddy .arm{background:var(--arm-color);border-color:var(--fur-border)}
+    .buddy .foot{background:var(--foot-color);border-color:var(--fur-border)}
+    .buddy[data-species="bear"] .ear{top:2%;height:27%;width:29%;border-radius:50%;transform:rotate(0)}
+    .buddy[data-species="bear"] .ear.left{left:1%}
+    .buddy[data-species="bear"] .ear.right{right:1%}
+    .buddy[data-species="cat"] .ear{top:-8%;width:32%;height:40%;border-radius:12%;clip-path:polygon(0% 0%,100% 80%,15% 100%);transform:rotate(-17deg)}
+    .buddy[data-species="cat"] .ear.right{clip-path:polygon(100% 0%,0% 80%,85% 100%);transform:rotate(17deg)}
+    .buddy[data-species="fox"] .ear{top:-10%;width:34%;height:45%;border-radius:15%;clip-path:polygon(28% 0%,100% 97%,0 100%);transform:rotate(-10deg)}
+    .buddy[data-species="fox"] .ear.right{clip-path:polygon(72% 0%,100% 100%,0 97%);transform:rotate(10deg)}
+    .buddy[data-species="chick"] .ear{display:none}
+    .buddy[data-species="chick"] .eye{width:14%;height:18%;top:38%}
+    .buddy[data-species="chick"] .mouth{width:21px;left:calc(50% - 10px);height:15px;background:#FF9D50;border:0;clip-path:polygon(50% 100%,0% 0%,100% 0%)}
+    .buddy[data-species="chick"].is-munching .mouth,.buddy[data-species="chick"].is-happy .mouth{width:25px;left:calc(50% - 12px);height:20px}
+    .buddy[data-species="secret"] .ear{top:-10%;height:49%;width:26%;border-radius:50% 50% 18% 18%}
+    .buddy[data-species="secret"] .body{box-shadow:inset 10px -13px 0 #C281F133,inset -13px 8px 0 #ffffff44,0 0 25px #B68CFC88}
+    .buddy .species-mark{position:absolute;z-index:8;top:8%;left:50%;transform:translateX(-50%);font-size:22px;filter:drop-shadow(0 2px 2px #6B4F4F55);pointer-events:none}
+    .buddy.is-grown .species-mark{font-size:26px}
+    .buddy.is-max .species-mark{font-size:32px;animation:starCrown 2.1s ease-in-out infinite}
+    @keyframes starCrown{50%{transform:translateX(-50%) translateY(-5px) rotate(8deg) scale(1.18)}}
+    .buddy.is-max .body{outline:3px solid #FFFFFF66;outline-offset:-5px}
+    .buddy{animation:breathe 3.4s ease-in-out infinite}
+    @keyframes breathe{0%,100%{transform:translateY(3px) rotate(-1deg) scale(var(--growth))}50%{transform:translateY(-6px) rotate(1deg) scale(var(--growth))}}
+    @keyframes happyhop{0%{transform:translateY(2px) scale(var(--growth)) rotate(-1deg)}20%{transform:translateY(-20px) scale(calc(var(--growth) * 1.04)) rotate(-3deg)}40%{transform:translateY(0) scale(calc(var(--growth) * .98)) rotate(1deg)}65%{transform:translateY(-11px) scale(calc(var(--growth) * 1.03)) rotate(2deg)}100%{transform:translateY(3px) scale(var(--growth)) rotate(-1deg)}}
+    .growth-card{position:relative;max-width:460px;margin:-4px auto 12px;background:#FFFDF8;border:2px solid #F0D9C8;border-radius:20px;padding:13px 15px 10px;box-shadow:0 4px 0 #F2E1D3;z-index:3}
+    .growth-top{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:900;gap:8px}
+    .growth-level{color:#AE4E5A;font-size:19px}
+    .growth-level.maxed{color:#98702F}
+    .growth-xp{color:#8D776F;font-size:12px;font-variant-numeric:tabular-nums}
+    .xp-track{background:#F0E1DB;border-radius:999px;height:17px;overflow:hidden;box-shadow:inset 0 2px 3px #76534220;margin:10px 0 8px}
+    .xp-fill{width:0;height:100%;border-radius:999px;background:linear-gradient(90deg,#FDBF67,#F37983);transition:width .55s cubic-bezier(.18,.9,.28,1);box-shadow:0 0 9px #FEB76A88}
+    .growth-collection{display:flex;gap:7px;justify-content:center;margin-top:8px}
+    .collection-pet{border:1.5px solid #E9D9CD;background:#FFF7F3;min-width:0;flex:1;max-width:60px;padding:5px 1px;border-radius:11px;font-size:11px;text-align:center;line-height:1.45;color:#8C766B}
+    .collection-pet strong{display:block;font-size:16px;line-height:1.2}
+    .collection-pet.max{background:#FFF0D7;border-color:#EFBE6F}
+    .collection-pet.active{outline:2px solid #F27F7E;outline-offset:1px}
+    #collectionHint{font-size:10px;text-align:center;color:#9A8275;margin:7px 0 0}
+    .xp-pop,.level-flash{position:absolute;z-index:26;pointer-events:none;left:50%;top:32%;transform:translate(-50%,-50%);opacity:0;text-shadow:0 3px 0 #995C59BB,0 3px 13px #472E2B80}
+    .xp-pop{font-weight:1000;font-size:29px;color:#FFCB47;white-space:nowrap}
+    .xp-pop.show{animation:xpPop 1s ease-out both}
+    .level-flash{top:18%;font-size:clamp(23px,7vw,38px);color:#FFDD72;font-weight:1000;line-height:1.4;text-align:center;width:90%}
+    .level-flash.show{animation:levelFlash 1.7s ease-out both}
+    @keyframes xpPop{0%{opacity:0;transform:translate(-50%,-20%) scale(.55)}22%{opacity:1;transform:translate(-50%,-65%) scale(1.22)}85%{opacity:1;transform:translate(-50%,-125%) scale(1)}100%{opacity:0;transform:translate(-50%,-170%) scale(.95)}}
+    @keyframes levelFlash{0%{opacity:0;transform:translate(-50%,-30%) scale(.5) rotate(-7deg)}23%,68%{opacity:1;transform:translate(-50%,-50%) scale(1.08) rotate(2deg)}100%{opacity:0;transform:translate(-50%,-70%) scale(1.2)}}
+    @media (max-height:740px){.growth-card{padding:10px 12px 8px;margin-top:-10px;margin-bottom:9px}.pet-panel{margin:3px auto -3px}.xp-track{height:14px;margin:6px 0}.growth-collection{margin-top:5px}}
   </style>
 </head>
 <body>
@@ -176,13 +234,18 @@
     <h1>いっしょに <span class="pink">ぱくっ！</span></h1>
     <p class="subhead">もぐちゃんと たのしく もぐもぐしよう</p>
   </section>
+  <section class="pet-panel" aria-label="おともだちをえらぶ">
+    <button id="prevPet" class="pet-nav" type="button" aria-label="前のおともだち">‹</button>
+    <div class="pet-label"><strong id="petName">もぐちゃん</strong><span id="petDescription">うさぎ ・ 1 / 5 ・ よこにスワイプしてね</span></div>
+    <button id="nextPet" class="pet-nav" type="button" aria-label="次のおともだち">›</button>
+  </section>
   <section aria-label="もぐちゃんのキャラクター">
     <div class="bubble" role="status" aria-live="polite"><p id="saying">いっしょに ごはん たべよ！</p></div>
     <div class="stage" id="stage">
       <span class="decor one" aria-hidden="true">✳</span><span class="decor two" aria-hidden="true">♥</span><span class="decor three" aria-hidden="true">✦</span>
-      <div class="stage-shadow" aria-hidden="true"></div>
+      <div class="stage-shadow" aria-hidden="true"></div><div id="xpPop" class="xp-pop" aria-hidden="true">+10 XP</div><div id="levelFlash" class="level-flash" aria-hidden="true">LEVEL UP!</div>
       <div id="buddy" class="buddy" aria-label="目を動かす、ピンク色のもぐちゃん" role="img">
-        <div class="ear left"></div><div class="ear right"></div>
+        <div class="ear left"></div><div class="ear right"></div><div class="species-mark" id="speciesMark" aria-hidden="true"></div>
         <div class="foot left"></div><div class="foot right"></div>
         <div class="body"></div><div class="belly"></div>
         <div class="arm left"></div><div class="arm right"></div>
@@ -210,6 +273,12 @@
       <span class="sparkle" style="left:31%;bottom:14%" aria-hidden="true">💛</span>
       <span class="sparkle" style="right:20%;bottom:19%" aria-hidden="true">✨</span>
     </div>
+  </section>
+  <section class="growth-card" aria-label="キャラクターのレベルと経験値">
+    <div class="growth-top"><span id="levelLabel" class="growth-level">LV.1</span><span id="xpLabel" class="growth-xp">0 / 10 XP</span></div>
+    <div class="xp-track" role="progressbar" id="xpTrack" aria-label="次のレベルまでの経験値" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><div class="xp-fill" id="xpFill"></div></div>
+    <div id="petCollection" class="growth-collection" aria-label="5体の育成状態"></div>
+    <p id="collectionHint">5ひき みんな LV.10で ひみつのこが…？ ✨</p>
   </section>
   <div class="status"><div id="statusPill" class="status-pill"><span class="status-dot"></span><span id="statusText">カメラをつけると めが あうよ 👀</span></div></div>
   <section class="controls" aria-label="ごはんの操作">
