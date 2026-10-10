@@ -608,8 +608,8 @@
     .stage .hearts{z-index:13}
     .stage .screen-badge{top:19%}
     .stage .level-flash{z-index:23}
-    .app.camera-active .stage{height:clamp(315px,47svh,510px);margin:4px -14px 0}
-    .app.camera-active .pet-mover{width:min(90vw,38svh,385px);top:51%}
+    .app.camera-active .stage{height:clamp(305px,45svh,475px);margin:4px -14px 0}
+    .app.camera-active .pet-mover{width:min(88vw,39svh,385px);top:51%}
     .app.camera-active .stage-bubble{bottom:8px;min-height:38px;padding:7px 10px}
     .app.camera-active .stage-pet-panel{margin:0;min-height:43px}
     .app.camera-active .status{margin:4px 0}
@@ -618,10 +618,10 @@
     /* On short phones, preserve a usable two-camera composition. */
     @media(max-height:690px){
       #stage{height:clamp(335px,51svh,450px)}
-      .app.camera-active .stage{height:clamp(265px,41svh,350px)}
+      .app.camera-active .stage{height:clamp(275px,43svh,355px)}
       .app.camera-active .pet-mover{width:min(86vw,34svh,340px)}
       .app.camera-active .stage-bubble{font-size:12px;min-height:34px}
-      .app.camera-active .camera-session .camera-view-layout .preview{height:clamp(145px,24svh,195px)}
+      .app.camera-active .camera-session .camera-view-layout .preview{height:clamp(145px,24svh,190px)}
     }
     @media(max-width:350px){
       .stage-topbar{left:5px;right:5px}
@@ -631,6 +631,12 @@
       .stage-topbar .pet-nav{width:27px}
       .stage-dex{flex-basis:32px;min-width:32px}
     }
+    /* Prevent the live preview from consuming space needed for the large avatar. */
+    .app.camera-active .camera-session .camera-view-layout .preview{
+      height:clamp(148px,24svh,200px)}
+    .app.camera-active .camera-session .camera-view-layout .preview.expanded{
+      height:clamp(245px,42svh,340px)}
+    .app.camera-active .stage-shadow{opacity:.38}
   </style>
 </head>
 <body>
@@ -1872,6 +1878,8 @@
     $('app').classList.toggle('camera-active',!!active);
     cameraSession.hidden=!active;
     manualFallback.hidden=!(active&&manual);
+    // Keep dragged, normalized positions aligned when camera mode changes scene height.
+    applyPetPosition();
     if(active && !previouslyActive)scheduleCameraSnap();
     if(!active){
       if(frameSnapId!==null){cancelAnimationFrame(frameSnapId);frameSnapId=null;}
