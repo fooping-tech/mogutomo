@@ -638,9 +638,14 @@
   let soundOn = true, effectsOn = true, audioContext = null, stream = null, faceLandmarker = null, starting = false;
   let requestId = 0, frameId = null, lastInference = 0, faceVisible = false, lastFaceTime = 0;
   let mealCount = 0, lastPraiseAt = -Infinity, lastInviteAt = performance.now(), lastActionAt = 0, munchTimeout=null, toastTimeout=null, happyTimeout=null;
-  const MOUTH_OPEN_THRESHOLD=.22, MOUTH_CLOSE_THRESHOLD=.09;
-  const MIN_OPEN_MS=260, MAX_OPEN_MS=4200;
-  let mouthPhase='arming', mouthClosedFrames=0, mouthOpenFrames=0, mouthCloseFrames=0, mouthOpenedAt=0;
+  // Face landmarks: normalise the inner-lip gap by mouth width, then calibrate
+  // each user's resting lip gap. A child doesn't have to match a fixed ratio.
+  const MOUTH_NEUTRAL_MAX=.20, MOUTH_OPEN_MIN=.18, MOUTH_OPEN_DELTA=.075;
+  const MOUTH_CLOSE_DELTA=.060, MOUTH_STRONG_OPEN_DELTA=.135;
+  const MIN_OPEN_MS=100, MAX_OPEN_MS=10000, AUTO_COOLDOWN_MS=950;
+  const MOUTH_TRANSIENT_GAP_MS=750;
+  let mouthPhase='arming', mouthClosedFrames=0, mouthOpenFrames=0, mouthCloseFrames=0;
+  let mouthOpenedAt=0, mouthBaseline=null, mouthPeak=0, mouthLastFrameAt=0;
   let helloSaid = false, frameAvgMs=0, cameraBiteTimeout=null, cameraBiteUntil=0;
 
   const LEVEL_STEPS=[0,10,25,45,70,100,135,175,220,270];
@@ -1286,7 +1291,7 @@
   }
   function praise(source){
     const now=performance.now();
-    if(source==='auto' && (now-lastPraiseAt < 8500 || !$('autoPraise').checked)) return false;
+    if(source==='auto' && (now-lastPraiseAt < AUTO_COOLDOWN_MS || !$('autoPraise').checked)) return false;
     // Critical path: always start animation first, while the gesture feels immediate.
     instantFeedback();
     cameraBiteBurst(source);
@@ -1318,42 +1323,90 @@
     return true;
   }
   function resetGesture(){
-    mouthPhase='arming';mouthClosedFrames=0;mouthOpenFrames=0;mouthCloseFrames=0;mouthOpenedAt=0;
+    mouthPhase='arming';
+    mouthClosedFrames=0;mouthOpenFrames=0;mouthCloseFrames=0;mouthOpenedAt=0;
+    mouthBaseline=null;mouthPeak=0;mouthLastFrameAt=0;
+    const bar=$('mouthMeterFill');if(bar)bar.style.width='0%';
   }
   function observeMouth(face,now){
     const w=video.videoWidth||640,h=video.videoHeight||480;
     const faceWidth=distance(face[234],face[454],w,h);
     const mouthWidth=distance(face[61],face[291],w,h);
-    if(faceWidth<w*.095||mouthWidth<w*.018){resetGesture();return 'face';}
-    // Lip gap divided by mouth width works without knowing whether food is hand-fed or spoon-fed.
-    const openness=distance(face[13],face[14],w,h)/mouthWidth;
-    if(!Number.isFinite(openness)){resetGesture();return 'face';}
-    const wideOpen=openness>=MOUTH_OPEN_THRESHOLD,closed=openness<=MOUTH_CLOSE_THRESHOLD;
-    if(!$('autoPraise').checked){resetGesture();return wideOpen?'open':'face';}
-    if(mouthPhase==='arming'){
-      // First see the mouth closed twice; do not count an already-open mouth at startup.
-      mouthClosedFrames=closed?mouthClosedFrames+1:0;
-      if(mouthClosedFrames>=2)mouthPhase='ready';
-      return wideOpen?'open':'face';
+    if(faceWidth<w*.08||mouthWidth<w*.012){
+      resetGesture();return 'face';
     }
+    // MediaPipe inner-lip landmarks 13/14 and mouth-corners 61/291.
+    const openness=distance(face[13],face[14],w,h)/mouthWidth;
+    if(!Number.isFinite(openness)||openness<0||openness>1.4){
+      resetGesture();return 'face';
+    }
+    mouthLastFrameAt=now;
+    const meter=$('mouthMeterFill');
+    if(meter)meter.style.width=Math.round(clamp(openness/.36,0,1)*100)+'%';
+    if(!$('autoPraise').checked){
+      resetGesture();return openness>=MOUTH_OPEN_MIN?'open':'face';
+    }
+    if(mouthPhase==='arming'){
+      // Never reward opening that began before the face was acquired. Two calm
+      // frames establish a person-specific mouth closure baseline.
+      if(openness<=MOUTH_NEUTRAL_MAX){
+        mouthBaseline=mouthBaseline===null?openness:mouthBaseline*.5+openness*.5;
+        if(++mouthClosedFrames>=2){mouthPhase='ready';mouthClosedFrames=0;}
+      }else{mouthClosedFrames=0;mouthBaseline=null;}
+      return openness>=MOUTH_OPEN_MIN?'open':'face';
+    }
+    const baseline=mouthBaseline??.06;
+    const openThreshold=Math.max(MOUTH_OPEN_MIN,baseline+MOUTH_OPEN_DELTA);
+    const isOpen=openness>=openThreshold;
     if(mouthPhase==='ready'){
-      if(wideOpen){
-        if(mouthOpenFrames===0)mouthOpenedAt=now;
+      if(isOpen){
+        mouthOpenedAt=now;mouthPeak=openness;mouthOpenFrames=1;mouthCloseFrames=0;
+        mouthPhase='opening';return 'open';
+      }
+      // Track slow changes in resting face/mouth pose without learning the
+      // opening itself as the new neutral position.
+      if(openness<=Math.max(MOUTH_NEUTRAL_MAX,baseline+.025))
+        mouthBaseline=baseline*.87+openness*.13;
+      return 'face';
+    }
+    mouthPeak=Math.max(mouthPeak,openness);
+    const closureThreshold=Math.min(
+      mouthPeak-MOUTH_CLOSE_DELTA,
+      Math.max(baseline+MOUTH_CLOSE_DELTA,mouthPeak*.58)
+    );
+    const closing=openness<=closureThreshold;
+    const duration=now-mouthOpenedAt;
+    if(duration>MAX_OPEN_MS){
+      resetGesture();
+      return 'face';
+    }
+    if(mouthPhase==='opening'){
+      if(isOpen){
         mouthOpenFrames++;
-        if(mouthOpenFrames>=2){mouthPhase='opened';mouthCloseFrames=0;}
-      }else mouthOpenFrames=0;
-      return wideOpen?'open':'face';
+        if(mouthOpenFrames>=2)mouthPhase='opened';
+        return 'open';
+      }
+      // For a quick but wide "aah" a single frame can be sufficient, as long
+      // as a separate closed frame follows and the movement is substantial.
+      const strong=mouthPeak>=Math.max(.27,baseline+MOUTH_STRONG_OPEN_DELTA);
+      if(closing&&strong&&duration>=MIN_OPEN_MS){
+        resetGesture();
+        return praise('auto')?'bite':'cooldown';
+      }
+      if(closing){
+        mouthPhase='ready';mouthOpenedAt=0;mouthOpenFrames=0;mouthCloseFrames=0;
+      }
+      return 'face';
     }
     if(mouthPhase==='opened'){
-      if(now-mouthOpenedAt>MAX_OPEN_MS){resetGesture();return wideOpen?'open':'face';}
-      mouthCloseFrames=closed?mouthCloseFrames+1:0;
-      if(mouthCloseFrames>=2){
-        const duration=now-mouthOpenedAt;
+      mouthCloseFrames=closing?mouthCloseFrames+1:0;
+      const strongDrop=mouthPeak-openness>=.15;
+      if(closing&&(mouthCloseFrames>=2 || (strongDrop&&duration>=175))){
         resetGesture();
-        if(duration>=MIN_OPEN_MS)return praise('auto')?'bite':'face';
+        if(duration>=MIN_OPEN_MS)return praise('auto')?'bite':'cooldown';
         return 'face';
       }
-      return closed?'closing':'open';
+      return closing?'closing':'open';
     }
     resetGesture();return 'face';
   }
@@ -1458,7 +1511,9 @@
   function loop(runId){
     if (runId!==requestId || !stream) return;
     const now=performance.now();
-    if (video.readyState>=2 && now-lastInference>125){
+    // Faster inference when the device can sustain it, slower on hot/slow phones.
+    const inferenceGap=frameAvgMs>65?140:frameAvgMs>38?110:85;
+    if (video.readyState>=2 && now-lastInference>=inferenceGap){
       lastInference=now;
       try {
         const start=performance.now();
@@ -1483,6 +1538,9 @@
           resetGesture();look();
           drawDetection(null);
           detectionStatus('search');
+        } else if(now-lastFaceTime>MOUTH_TRANSIENT_GAP_MS){
+          // A spoon or food can briefly hide the face without restarting a bite.
+          mouthCloseFrames=0;
         }
         frameAvgMs=frameAvgMs*.85+(performance.now()-start)*.15;
         if(frameAvgMs>65&&!lowQuality)refreshPerformance();
