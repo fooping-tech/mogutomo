@@ -456,3 +456,21 @@ test('voxel silhouette automatically uses the larger available canvas area',()=>
   assert.ok(Math.max(...xs)-Math.min(...xs)>=180,'The character is much wider than before');
   assert.ok(Math.max(...ys)-Math.min(...ys)>=275,'The character fills the stage vertically');
 });
+
+test('social cards use a fresh HTTPS image and cache-busted share URL',()=>{
+  const head=html.split('</head>')[0];
+  const absolute=(attribute)=>new RegExp('<meta\\s+(?:property|name)="'+attribute+'"\\s+content="([^"]+)"').exec(head)?.[1];
+  const ogUrl=absolute('og:url');
+  const ogImage=absolute('og:image');
+  const twitterImage=absolute('twitter:image');
+  assert.equal(ogUrl,'https://fooping-tech.github.io/mogutomo/?share=20261010b');
+  assert.equal(ogImage,'https://fooping-tech.github.io/mogutomo/og-image.png?card=20261010b');
+  assert.equal(twitterImage,ogImage);
+  assert.equal(absolute('og:image:secure_url'),ogImage);
+  assert.equal(absolute('og:image:url'),ogImage);
+  assert.equal(absolute('og:image:width'),'1200');
+  assert.equal(absolute('og:image:height'),'630');
+  assert.equal(absolute('twitter:card'),'summary_large_image');
+  assert.match(head,/name="robots" content="index, follow, max-image-preview:large"/);
+  assert.match(head,/rel="canonical" href="https:\/\/fooping-tech.github.io\/mogutomo\/"/);
+});
