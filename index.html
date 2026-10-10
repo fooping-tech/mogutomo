@@ -429,6 +429,59 @@
       color:#9A6252;background:#FFF7EF;border-radius:14px;font-size:14px;font-weight:900;
     }
     @media(prefers-reduced-motion:reduce){.camera-session .preview{transition:none}}
+
+    /* Camera-on: one snug stage-and-camera viewport; optional scroll always remains available. */
+    .play-frame{position:relative;scroll-snap-align:start;scroll-snap-stop:normal;scroll-margin-top:90px}
+    html:has(.app.camera-active){scroll-snap-type:y proximity}
+    .app.camera-active .play-frame{scroll-snap-align:start;scroll-snap-stop:always}
+    .app.camera-active .bubble{min-height:39px;margin:3px auto -3px;padding:7px 12px;border-radius:16px}
+    .app.camera-active #saying{font-size:clamp(14px,3.8vw,18px)}
+    .app.camera-active .stage{height:clamp(160px,25svh,230px)}
+    .app.camera-active #buddy{width:min(44vw,26svh,220px);height:min(44vw,26svh,220px)}
+    .app.camera-active .status{margin:0 0 6px}
+    .app.camera-active .status-pill{padding:5px 11px;font-size:11px}
+    .app.camera-active .controls{gap:0}
+    .camera-view-layout{display:grid;grid-template-columns:clamp(48px,16vw,72px) minmax(0,1fr) clamp(48px,15vw,68px);gap:5px;align-items:stretch;width:100%}
+    .camera-session .camera-view-layout .preview{
+      position:relative;inset:auto;width:100%;min-width:0;height:clamp(175px,27svh,225px);
+      margin:0;z-index:1;box-shadow:0 4px 0 #E4CBBC,0 8px 18px #79564925
+    }
+    .camera-session .camera-view-layout .preview.expanded{
+      width:100%;height:clamp(240px,42svh,340px);position:relative;inset:auto
+    }
+    .camera-side{display:flex;min-width:0;flex-direction:column;align-items:stretch;justify-content:center;gap:9px;
+      background:#FFF9EDED;border:1px solid #ECDCCB;border-radius:13px;padding:7px 3px;
+      box-shadow:inset 0 2px 4px #FFFFFF99}
+    .camera-side-chip{font-size:clamp(10px,2.9vw,12px);font-weight:900;text-align:center;
+      padding:6px 2px;border-radius:8px;background:#EEDDD1;color:#715A53;line-height:1.3}
+    .camera-side-chip.detected{background:#B7F0D4;color:#155E45}
+    .camera-side .detection-state{
+      display:block;position:static;inset:auto;border-radius:9px;padding:8px 3px;
+      text-align:center;font-size:clamp(10px,2.7vw,12px);line-height:1.5;
+      background:#FFF0DCEB;color:#805D42;text-shadow:none;font-weight:900;
+      overflow-wrap:anywhere;word-break:normal;pointer-events:none
+    }
+    .camera-side .detection-state[data-state="face"]{background:#DFF6E6;color:#206D53}
+    .camera-side .detection-state[data-state="open"],.camera-side .detection-state[data-state="closing"]{background:#FFE0A2;color:#865224}
+    .camera-side .detection-state[data-state="bite"]{background:#FFE3D4;color:#B34B55}
+    .camera-side .detection-state[data-state="error"]{background:#F8DAD6;color:#995257}
+    .camera-side-help{font-size:clamp(10px,2.6vw,12px);font-weight:900;color:#BA8567;
+      line-height:1.7;text-align:center}
+    .camera-session .preview .preview-top{z-index:7}
+    /* Preview video has no bottom status overlay: lips remain fully visible. */
+    .camera-session .preview .detection-chips{display:none}
+    @media(max-height:690px){
+      .app.camera-active .stage{height:clamp(145px,23svh,185px)}
+      .app.camera-active #buddy{width:min(43vw,23svh,190px);height:min(43vw,23svh,190px)}
+      .camera-session .camera-view-layout .preview{height:clamp(160px,25svh,190px)}
+      .app.camera-active .bubble{min-height:34px;padding:5px 9px}
+    }
+    @media(max-width:340px){
+      .camera-view-layout{grid-template-columns:47px minmax(0,1fr) 47px;gap:4px}
+      .camera-side{gap:5px;padding:5px 2px}
+      .camera-side .detection-state{font-size:10px;padding:6px 1px}
+    }
+    @media(prefers-reduced-motion:reduce){html:has(.app.camera-active){scroll-behavior:auto}}
   </style>
 </head>
 <body>
@@ -461,6 +514,7 @@
     <div class="pet-label"><strong id="petName">もぐちゃん</strong><span id="petDescription">うさぎ ・ 1 / 5 ・ よこにスワイプしてね</span></div>
     <button id="nextPet" class="pet-nav" type="button" aria-label="次のおともだち">›</button>
   </section>
+  <section class="play-frame" id="playFrame" aria-label="キャラとカメラの表示エリア">
   <section aria-label="もぐちゃんのキャラクター">
     <div class="bubble" role="status" aria-live="polite"><p id="saying">いっしょに ごはん たべよ！</p></div>
     <div class="stage" id="stage">
@@ -493,17 +547,26 @@
     <button id="eatTogether" class="action secondary" type="button"><span class="emoji" aria-hidden="true">🥄</span><span class="large">いっしょに ぱくっ</span><span class="small">もぐちゃんも たべるよ</span></button>
     <button id="ateButton" class="action primary" type="button"><span class="emoji" aria-hidden="true">🎉</span><span class="large">たべたよ！</span><span class="small">タップで ほめてもらおう</span></button>
     <div id="cameraSession" class="camera-session" hidden aria-label="ライブカメラ">
-      <div class="preview" id="preview" aria-label="ライブカメラの検出状態">
-        <video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video>
-        <canvas id="detectionCanvas" class="detection-canvas" aria-hidden="true"></canvas>
-        <div class="preview-top"><span class="live">● LIVE</span><button id="expandPreview" class="expand-preview" type="button" aria-label="カメラ映像を拡大" aria-pressed="false">⤢</button></div>
-        <span id="detectionState" class="detection-state" data-state="search" role="status" aria-live="polite">👀 かおをさがすよ</span>
-        <div class="detection-chips" aria-hidden="true"><span id="faceChip">顔 ・</span><span id="mouthChip">口 ・</span></div>
-        <div id="cameraBiteEffect" class="camera-bite-effect" aria-hidden="true"><span class="burst one">✨</span><span class="burst two">🌟</span><span class="bite-label" id="cameraBiteLabel">ぱくっ！</span><span class="burst three">💛</span></div>
+      <div class="camera-view-layout">
+        <div class="camera-side camera-side-left" aria-label="顔の認識状態">
+          <span id="faceChip" class="camera-side-chip">顔 ・</span>
+          <span id="detectionState" class="detection-state" data-state="search" role="status" aria-live="polite">👀 かおをさがすよ</span>
+        </div>
+        <div class="preview" id="preview" aria-label="ライブカメラの映像">
+          <video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video>
+          <canvas id="detectionCanvas" class="detection-canvas" aria-hidden="true"></canvas>
+          <div class="preview-top"><span class="live">● LIVE</span><button id="expandPreview" class="expand-preview" type="button" aria-label="カメラ映像を拡大" aria-pressed="false">⤢</button></div>
+          <div id="cameraBiteEffect" class="camera-bite-effect" aria-hidden="true"><span class="burst one">✨</span><span class="burst two">🌟</span><span class="bite-label" id="cameraBiteLabel">ぱくっ！</span><span class="burst three">💛</span></div>
+        </div>
+        <div class="camera-side camera-side-right" aria-label="口の認識状態">
+          <span id="mouthChip" class="camera-side-chip">口 ・</span>
+          <span class="camera-side-help" aria-hidden="true">あーん<br>ぱくっ</span>
+        </div>
       </div>
       <button id="manualFallback" class="camera-manual-button" type="button" hidden>🎉 手動でほめる</button>
     </div>
   </section>
+  </section><!-- /playFrame -->
   <section class="camera-row" aria-label="カメラ設定">
     <div class="camera-symbol" aria-hidden="true">📷</div>
     <div class="camera-label"><strong>カメラで みまもる</strong><span id="cameraDescription">おくちを おおきく あけて とじると はんのうするよ</span></div>
