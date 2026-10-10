@@ -616,16 +616,33 @@
     }
     return {added,leveled,evolved,unlocked,level:after};
   }
+  const VOICE_PATTERNS=[
+    [[0,.09,890,1530,.55,'chirp'],[.13,.11,1280,1850,.47,'chirp'],[.30,.19,1580,1040,.42,'bell']],
+    [[0,.36,250,405,.61,'warm'],[.42,.42,375,260,.58,'warm'],[.93,.31,305,495,.49,'warm']],
+    [[0,.46,890,380,.55,'meow'],[.49,.13,510,720,.42,'meow'],[.67,.54,790,520,.52,'meow']],
+    [[0,.07,1100,1550,.49,'bright'],[.12,.075,1380,1050,.51,'bright'],[.24,.07,1020,1620,.49,'bright'],[.36,.26,1300,720,.45,'bright']],
+    [[0,.07,1380,1810,.43,'chirp'],[.12,.055,1630,2020,.43,'chirp'],[.21,.07,1440,1900,.41,'chirp'],[.34,.075,1750,2160,.41,'chirp'],[.48,.10,1600,1370,.45,'chirp']],
+    [[0,.22,840,1270,.44,'bell'],[.19,.25,1230,1580,.43,'bell'],[.42,.22,1510,960,.44,'bell'],[.71,.53,980,470,.40,'meow']]
+  ];
   function creatureNotes(kind,index=selectedPet){
-    const notes=PETS[index].voice;
-    if(kind==='hello')return notes.slice(0,2);
-    if(kind==='eatVoice')return notes.slice(0,2).map(([offset,duration,start,end,volume,wave])=>[offset*.75,duration*.78,start*.86,end*.82,volume,wave]);
+    const lv=levelFor(petXP[index]),stageId=stageFor(lv).id;
+    const props=stageId==='seed'?[1.28,.72]:stageId==='child'?[1.13,.85]:stageId==='young'?[1,1]:stageId==='grown'?[.92,1.13]:[.88,1.24];
+    const source=VOICE_PATTERNS[index],sourceNotes=kind==='hello'?source.slice(0,2):kind==='eatVoice'?source.slice(0,3):source;
+    const notes=sourceNotes.map(([offset,duration,from,to,volume,wave])=>[
+      offset*props[1]*(kind==='eatVoice'?.84:1),duration*props[1]*(kind==='eatVoice'?.82:1),
+      from*props[0]*(kind==='eatVoice'?.94:1),to*props[0]*(kind==='eatVoice'?.92:1),volume,wave
+    ]);
+    if(stageId==='legend'&&kind==='happyVoice'){
+      const last=notes[notes.length-1],at=last[0]+last[1]+.07;
+      notes.push([at,.28,last[3]*1.12,last[3]*1.37,.32,'bell']);
+    }
     return notes;
   }
   const EFFECT_NOTES={
     munch:[[0,.12,430,230,.52,'triangle'],[.17,.10,315,210,.43,'sine'],[.30,.09,280,190,.40,'sine']],
     praise:[[0,.16,523,610,.45,'sine'],[.13,.18,659,740,.46,'sine'],[.27,.18,784,900,.46,'sine'],[.41,.27,1047,1175,.50,'sine']],
     levelUp:[[0,.13,523,700,.52,'triangle'],[.12,.16,659,850,.50,'sine'],[.28,.16,830,1080,.52,'triangle'],[.43,.38,1047,1396,.56,'sine']],
+    evolve:[[0,.10,580,740,.55,'chirp'],[.12,.14,690,920,.56,'bell'],[.30,.18,790,1190,.56,'bell'],[.52,.54,1020,1570,.52,'bell']],
     secret:[[0,.20,450,690,.5,'sine'],[.16,.2,600,860,.54,'triangle'],[.35,.23,880,1170,.54,'sine'],[.55,.42,1080,1620,.55,'triangle']],
     enabled:[[0,.15,660,910,.62,'triangle']]
   };
@@ -658,7 +675,7 @@
     const ctx=audioContext;
     const at=ctx.currentTime+0.015+offset;
     const osc=ctx.createOscillator(),gain=ctx.createGain();
-    osc.type=type;
+    osc.type=(type==='chirp'||type==='bright')?'triangle':'sine';
     osc.frequency.setValueAtTime(from,at);
     osc.frequency.exponentialRampToValueAtTime(Math.max(1,to),at+duration*.8);
     gain.gain.setValueAtTime(.0001,at);
@@ -679,7 +696,7 @@
   const mediaClips = {};
   function setAudioStatus(message){ $('audioStatus').textContent=message; }
   function createSoundClip(kind,index=selectedPet){
-    const cacheKey=(kind==='hello'||kind==='eatVoice'||kind==='happyVoice')?kind+':'+index:kind;
+    const cacheKey=(kind==='hello'||kind==='eatVoice'||kind==='happyVoice')?kind+':'+index+':'+stageFor(levelFor(petXP[index])).id:kind;
     if(mediaClips[cacheKey])return mediaClips[cacheKey];
     if(typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)throw Error('WAV Blob URL unavailable');
     const notes=soundNotes(kind,index);
@@ -694,8 +711,15 @@
       for(let i=0;i<length&&startIndex+i<count;i++){
         const progress=i/Math.max(length-1,1);
         const hz=startHz*Math.pow(endHz/startHz,progress);
-        phase+=2*Math.PI*hz/rate;
-        const signal=wave==='triangle'?2*Math.asin(Math.sin(phase))/Math.PI:Math.sin(phase);
+        const vibrato=wave==='meow'?1+.075*Math.sin(i/rate*Math.PI*2*8):wave==='chirp'?1+.018*Math.sin(i/rate*Math.PI*2*25):1;
+        phase+=2*Math.PI*hz*vibrato/rate;
+        const fundamental=Math.sin(phase),triangle=2*Math.asin(fundamental)/Math.PI;
+        const signal=wave==='triangle'?triangle:
+          wave==='chirp'?triangle*.75+Math.sin(phase*2)*.17:
+          wave==='bright'?triangle*.63+Math.sin(phase*3)*.22:
+          wave==='warm'?fundamental*.8+Math.sin(phase*2)*.18:
+          wave==='meow'?fundamental*.79+Math.sin(phase*2)*.12:
+          wave==='bell'?fundamental*.72+Math.sin(phase*2.45)*.17:fundamental;
         const attack=Math.min(1,i/(rate*.012));
         const release=Math.min(1,(length-i)/(rate*.045));
         samples[startIndex+i]+=signal*amplitude*attack*release;
@@ -1217,6 +1241,7 @@
   loadGrowth();
   renderPet();
   saying.textContent=currentPet().intro;
+  saveGrowth();
   look();
 })();
 </script>
