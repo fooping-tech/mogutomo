@@ -24,6 +24,7 @@
     .sound-controls .icon-button{width:40px;height:40px;font-size:20px}
     .camera-error{margin:12px 3px 0;padding:12px;border:1px solid #E3A190;background:#FFF9F3;border-radius:12px;color:#70483B;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
     .camera-error[hidden]{display:none}
+    .audio-status{font-size:11px;color:#84665A;text-align:center;margin:10px 4px 0;line-height:1.5}
     .camera-error summary{font-weight:800;cursor:pointer}
     .camera-error code{font-family:ui-monospace,monospace;font-size:11px;white-space:pre-wrap}
     .buddy.is-happy {animation:happyhop .95s cubic-bezier(.22,.9,.3,1) 1}
@@ -171,6 +172,7 @@
     <button type="button" class="camera-btn" id="cameraButton">カメラ ON</button>
   </section>
   <details id="cameraError" class="camera-error" hidden><summary>カメラのエラー詳細</summary><code id="cameraErrorText"></code></details>
+  <div id="audioStatus" class="audio-status" role="status" aria-live="polite">🔉で音をためせるよ</div>
   <div class="bottom-meta">
     <label class="toggle-line"><input type="checkbox" id="autoPraise" checked><span>じどうで ほめる</span></label>
     <div id="biteCount" aria-live="polite">🌟 ぱくっ 0かい</div>
@@ -265,12 +267,93 @@
         break;
     }
   }
-  async function playSound(kind,channel){
-    if(channel==='voice'&&!soundOn || channel==='effects'&&!effectsOn || document.hidden) return;
+  // HTMLAudioElement plays through the media audio path on iPhone.
+  // Safari sometimes silently mutes a running Web Audio context. Keep Web Audio as a fallback.
+  const mediaPlayers = {};
+  const mediaClips = {};
+  function setAudioStatus(message){ $('audioStatus').textContent=message; }
+  function createSoundClip(kind){
+    if(mediaClips[kind])return mediaClips[kind];
+    if(typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)throw Error('WAV Blob URL unavailable');
+    const notes={
+      hello:[[0,.17,800,1250,.53,'triangle'],[.21,.2,1100,920,.45,'sine']],
+      eatVoice:[[0,.115,760,970,.55,'triangle'],[.14,.15,1020,740,.45,'triangle']],
+      happyVoice:[[0,.16,710,1030,.5,'triangle'],[.18,.2,920,1360,.52,'sine'],[.4,.18,1280,1040,.38,'triangle']],
+      munch:[[0,.12,430,230,.52,'triangle'],[.17,.10,315,210,.43,'sine'],[.30,.09,280,190,.40,'sine']],
+      praise:[[0,.16,523,610,.45,'sine'],[.13,.18,659,740,.46,'sine'],[.27,.18,784,900,.46,'sine'],[.41,.27,1047,1175,.50,'sine']],
+      enabled:[[0,.15,660,910,.62,'triangle']]
+    }[kind]||[[0,.15,650,850,.5,'sine']];
+    const rate=22050;
+    const seconds=Math.max(...notes.map(n=>n[0]+n[1]))+.08;
+    const count=Math.ceil(rate*seconds);
+    const samples=new Float32Array(count);
+    for(const [offset,duration,startHz,endHz,amplitude,wave] of notes){
+      let phase=0;
+      const startIndex=Math.floor(offset*rate);
+      const length=Math.floor(duration*rate);
+      for(let i=0;i<length&&startIndex+i<count;i++){
+        const progress=i/Math.max(length-1,1);
+        const hz=startHz*Math.pow(endHz/startHz,progress);
+        phase+=2*Math.PI*hz/rate;
+        const signal=wave==='triangle'?2*Math.asin(Math.sin(phase))/Math.PI:Math.sin(phase);
+        const attack=Math.min(1,i/(rate*.012));
+        const release=Math.min(1,(length-i)/(rate*.045));
+        samples[startIndex+i]+=signal*amplitude*attack*release;
+      }
+    }
+    const data=new ArrayBuffer(44+count*2), view=new DataView(data);
+    const tag=(i,t)=>{for(let j=0;j<t.length;j++)view.setUint8(i+j,t.charCodeAt(j));};
+    tag(0,'RIFF');view.setUint32(4,36+count*2,true);tag(8,'WAVE');tag(12,'fmt ');
+    view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);
+    view.setUint32(24,rate,true);view.setUint32(28,rate*2,true);
+    view.setUint16(32,2,true);view.setUint16(34,16,true);
+    tag(36,'data');view.setUint32(40,count*2,true);
+    for(let i=0;i<count;i++){
+      const sample=Math.max(-.9,Math.min(.9,samples[i]));
+      view.setInt16(44+i*2,Math.round(sample*32767),true);
+    }
+    mediaClips[kind]=URL.createObjectURL(new Blob([data],{type:'audio/wav'}));
+    return mediaClips[kind];
+  }
+  async function tryWebAudioFallback(kind,error){
+    console.warn('HTML audio unavailable; trying Web Audio',error);
     const ready=await activateAudio();
-    if(!ready){if(channel==='voice'||channel==='effects') showToast('音が鳴りません。音量を上げ、Safariで「🔉」を押してみてね。');return;}
-    if(channel==='voice'&&!soundOn || channel==='effects'&&!effectsOn || document.hidden) return;
-    try{scheduleSound(kind);}catch(e){console.warn('Sound failed',e);}
+    if(!ready){setAudioStatus('音の再生がブロックされました。Safariで直接開き、音量を確認してください。');return;}
+    try{
+      scheduleSound(kind);
+      setAudioStatus('Web Audioで再生を試みました。聞こえなければ消音モードを確認してください。');
+    }catch(e){
+      console.warn('Audio fallback error',e);
+      setAudioStatus('音の再生に失敗: '+(e?.name||'Error'));
+    }
+  }
+  function playSound(kind,channel){
+    if(channel==='voice'&&!soundOn||channel==='effects'&&!effectsOn||document.hidden)return;
+    // Call HTMLMediaElement.play() synchronously from the button click.
+    // Waiting for AudioContext.resume() first can lose user activation in Safari.
+    try{
+      if(!document.createElement)throw Error('HTMLAudioElement unsupported');
+      let player=mediaPlayers[channel];
+      if(!player){
+        player=document.createElement('audio');
+        player.preload='auto';
+        player.setAttribute('playsinline','');
+        player.style.display='none';
+        document.body.appendChild(player);
+        mediaPlayers[channel]=player;
+      }
+      player.pause();
+      player.src=createSoundClip(kind);
+      player.volume=1;
+      setAudioStatus('🔉 音を再生中。聞こえないときは音量と消音モードを確認してね。');
+      const result=player.play();
+      if(result&&typeof result.catch==='function'){
+        result.catch(e=>{
+          if(e?.name==='AbortError')return;
+          void tryWebAudioFallback(kind,e);
+        });
+      }
+    }catch(e){void tryWebAudioFallback(kind,e);}
   }
   function playEffect(kind){void playSound(kind,'effects');}
   // Pointerdown unlock makes the first actual button tap work on Safari too.
