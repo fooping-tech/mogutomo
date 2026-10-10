@@ -8,8 +8,8 @@
 - カメラで顔・手・口元の位置を端末内推論し、**手を口元へ近づけて離す**動きがあれば「ひと口」の候補として褒めます
 - キャラクターが自分でもパクッと食べるアニメーションをします
 - 自動判定が外れたときは「たべたよ！」ボタンでいつでも褒めます
-- 日本語の音声読み上げ（🔊）と効果音（🎵）を別々に ON/OFF、自動で褒める ON/OFF
-- 声は高め・やわらかめに調整し、日本語音声が複数あれば女性・高品質に近い名前の音声を優先します（実際の声質は端末に依存）
+- 鳴き声（音声ファイル不要のWeb Audio合成）（🔊）と効果音（🎵）を別々に ON/OFF、自動で褒める ON/OFF
+- 声は日本語読み上げではなく、短い動物風の鳴き声に変更しました。
 - 褒めたときにキャラクターがぴょんっと跳ね、手をふり、ほっぺと表情が変わり、ハート・キラキラが飛び出す演出を追加
 - 「いっしょに ぱくっ」ではポクッ＋もぐもぐ音、「たべたよ！」や自動判定ではキラキラした褒め音が鳴ります
 - 効果音は Web Audio API で端末内生成。効果音ファイルの配信はありません
@@ -41,7 +41,7 @@ python3 -m http.server 8000
 
 - HTML / CSS / JavaScript の1ファイルのみ。ビルド不要
 - MediaPipe Tasks Vision Face Landmarker + Hand Landmarker（初回に jsDelivr と Google Cloud Storage からダウンロード）
-- `getUserMedia({ facingMode: 'user' })`、`speechSynthesis`、`AudioContext`（効果音合成）、端末内 WebAssembly / WebGL 推論
+- `getUserMedia({ facingMode: 'user' })`、`AudioContext`（効果音合成）、端末内 WebAssembly / WebGL 推論
 - 顔ランドマークを視線位置にマッピング。口元と手の指先が顔幅に対して近づき、再び離れる動きを簡易判定
 - バッテリー節約のため推論間隔は約125ms以上
 
