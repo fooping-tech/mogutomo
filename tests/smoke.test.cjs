@@ -402,7 +402,7 @@ test('large stage contains name, navigation, speech and avatar; camera remains o
   const cam=html.indexOf('id="video"',at);
   assert.ok(at>=0&&name>at&&speech>name&&mover>speech&&avatar>mover&&fx>avatar&&fx<controls);
   assert.ok(cam>controls,'Camera is not a layer within the avatar');
-  assert.match(html,/\.app\.camera-active \.stage\{height:clamp\(315px,47svh,510px\)/);
+  assert.match(html,/\.app\.camera-active \.stage\{height:clamp\(305px,45svh,475px\)/);
   assert.match(html,/\.stage-bubble\{position:absolute/);
   assert.match(html,/\.pet-mover\{position:absolute/);
   assert.match(html,/\.app\.camera-active \.roster-card,\.app\.camera-active \.intro\{display:none\}/);
