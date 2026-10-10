@@ -1148,11 +1148,27 @@
     if(!ctx||typeof ctx.moveTo!=='function')return false;
     const lv=levelFor(petXP[selectedPet]);
     const shape=buildVoxelPet(currentPet().species,lv);
-    const size=360,u=shape.unit,ys=[...shape.cells.values()].map(v=>v.y);
-    const minY=Math.min(...ys),maxY=Math.max(...ys);
-    const originY=Math.round((size-(maxY-minY+1)*u)/2-minY*u+u*.18);
+    const size=360,u=shape.unit;
+    const all=shape.cells;
+    // Fill the canvas with the actual silhouette, instead of wasting over half
+    // of the available area around the voxel model. Include every cube corner.
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    const projectRaw=(x,y,z)=>[x*u+z*u*.38,y*u-z*u*.28];
+    for(const {x,y,z} of all.values()){
+      for(const cx of [x,x+1])for(const cy of [y,y+1])for(const cz of [z,z+1]){
+        const [px,py]=projectRaw(cx,cy,cz);
+        minX=Math.min(minX,px);maxX=Math.max(maxX,px);
+        minY=Math.min(minY,py);maxY=Math.max(maxY,py);
+      }
+    }
+    const spanX=Math.max(1,maxX-minX),spanY=Math.max(1,maxY-minY);
+    const zoom=Math.min(312/spanX,318/spanY);
+    const padX=(size-spanX*zoom)/2,padY=(size-spanY*zoom)/2;
     ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,size,size);
-    const xy=(x,y,z)=>[Math.round(180+x*u+z*u*.38),Math.round(originY+y*u-z*u*.28)];
+    const xy=(x,y,z)=>{
+      const [px,py]=projectRaw(x,y,z);
+      return [Math.round((px-minX)*zoom+padX),Math.round((py-minY)*zoom+padY)];
+    };
     const poly=(points,color)=>{
       ctx.fillStyle=color;ctx.beginPath();
       ctx.moveTo(...points[0]);
@@ -1160,7 +1176,7 @@
       ctx.closePath();ctx.fill();
       ctx.strokeStyle='#4C405644';ctx.lineWidth=.8;ctx.stroke();
     };
-    const all=shape.cells,has=(x,y,z)=>all.has(VKEY(x,y,z));
+    const has=(x,y,z)=>all.has(VKEY(x,y,z));
     const blocks=[...all.values()].sort((a,b)=>a.z-b.z||a.y-b.y||a.x-b.x);
     for(const {x,y,z,color} of blocks){
       // Top and right faces are shaded individually; only exposed faces draw.
@@ -1194,21 +1210,22 @@
   function renderPet(){
     const pet=currentPet(),lv=levelFor(petXP[selectedPet]),evo=stageFor(lv);
     stage.dataset.world=pet.species;
+    applyPetPosition();
     const collectionCount=secretUnlocked?6:5;
     const palette=['--fur-start','--fur-end','--fur-border','--ear-inside','--belly-color','--cheek-color','--arm-color','--foot-color'];
     pet.colors.forEach((value,i)=>buddy.style.setProperty(palette[i],value));
-    buddy.style.setProperty('--growth',(Math.max(.78,evo.scale+(lv-evo.start)*.018)).toFixed(3));
+    buddy.style.setProperty('--growth',(Math.max(.96,evo.scale+(lv-evo.start)*.018)).toFixed(3));
     drawVoxelCharacter();
     buddy.dataset.stage=evo.id;
     $('evolutionStage').textContent=evo.name+' ・ '+voiceNames[selectedPet];
     buddy.dataset.species=pet.species;
-    buddy.setAttribute('aria-label',pet.name+'。'+pet.kind+'、レベル'+lv+'。左右スワイプで切り替え');
+    buddy.setAttribute('aria-label',pet.name+'。'+pet.kind+'、レベル'+lv+'。タップでなでなで、ドラッグで位置を変更');
     buddy.classList.toggle('is-grown',lv>=5);
     buddy.classList.toggle('is-max',lv===10);
     $('speciesMark').textContent=lv===10?'✦':lv>=5?'✧':'';
     $('petName').textContent=pet.emoji+' '+pet.name;
     $('petSubhead').textContent=pet.name+'と たのしく もぐもぐしよう';
-    $('petDescription').textContent=pet.kind+' ・ '+(selectedPet+1)+' / '+collectionCount+' ・ ↔スワイプ';
+    $('petDescription').textContent=pet.kind+' ・ '+(selectedPet+1)+' / '+collectionCount+' ・ ドラッグで移動';
     $('levelLabel').textContent=lv===10?'LV.10 MAX ✨':'LV.'+lv;
     $('levelLabel').classList.toggle('maxed',lv===10);
     const floor=LEVEL_STEPS[lv-1],ceil=lv===10?LEVEL_STEPS[9]:LEVEL_STEPS[lv];
