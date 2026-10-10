@@ -173,7 +173,6 @@ test('5 originals evolve through level ten and unlock a sixth species',()=>{
   assert.equal(app.state().selected,5);
   assert.equal(app.state().events.includes('secret_unlocked'),true);
   assert.equal(app.state().events.includes('collection_complete'),true);
-  assert.match(app.get('dexGrid').innerHTML||'','', 'Dex can be opened after unlock');
   app.click('openDex');
   assert.match(app.get('dexGrid').innerHTML,/ルミナ/);
   assert.ok(!app.get('dexGrid').innerHTML.includes(' disabled'));
