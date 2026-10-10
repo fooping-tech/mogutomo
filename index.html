@@ -1227,9 +1227,10 @@
     const lv=levelFor(petXP[index]),stageId=stageFor(lv).id;
     const props=stageId==='seed'?[1.28,.72]:stageId==='child'?[1.13,.85]:stageId==='young'?[1,1]:stageId==='grown'?[.92,1.13]:[.88,1.24];
     const source=VOICE_PATTERNS[index],sourceNotes=kind==='hello'?source.slice(0,2):kind==='eatVoice'?source.slice(0,3):source;
+    const voxelTimbres=['chip','wood','pulse','pluck','peep','crystal'];
     const notes=sourceNotes.map(([offset,duration,from,to,volume,wave])=>[
       offset*props[1]*(kind==='eatVoice'?.84:1),duration*props[1]*(kind==='eatVoice'?.82:1),
-      from*props[0]*(kind==='eatVoice'?.94:1),to*props[0]*(kind==='eatVoice'?.92:1),volume,wave
+      from*props[0]*(kind==='eatVoice'?.94:1),to*props[0]*(kind==='eatVoice'?.92:1),volume,voxelTimbres[index]
     ]);
     if(stageId==='legend'&&kind==='happyVoice'){
       const last=notes[notes.length-1],at=last[0]+last[1]+.07;
@@ -1237,16 +1238,17 @@
     }
     return notes;
   }
+  // Original dry 'block', 'wood', 'stone' and 8-bit game tones; no sampled game assets.
   const EFFECT_NOTES={
-    munch:[[0,.12,430,230,.52,'triangle'],[.17,.10,315,210,.43,'sine'],[.30,.09,280,190,.40,'sine']],
-    praise:[[0,.16,523,610,.45,'sine'],[.13,.18,659,740,.46,'sine'],[.27,.18,784,900,.46,'sine'],[.41,.27,1047,1175,.50,'sine']],
-    levelUp:[[0,.13,523,700,.52,'triangle'],[.12,.16,659,850,.50,'sine'],[.28,.16,830,1080,.52,'triangle'],[.43,.38,1047,1396,.56,'sine']],
-    comboNice:[[0,.105,700,920,.43,'chirp'],[.15,.13,960,1110,.37,'bell']],
-    comboGreat:[[0,.10,720,950,.43,'chirp'],[.12,.13,925,1200,.40,'bell'],[.27,.19,1175,1320,.38,'bell']],
-    comboFever:[[0,.12,660,900,.45,'bell'],[.16,.13,840,1130,.47,'chirp'],[.32,.16,1080,1350,.44,'bell'],[.51,.25,1250,1590,.46,'bell']],
-    evolve:[[0,.10,580,740,.55,'chirp'],[.12,.14,690,920,.56,'bell'],[.30,.18,790,1190,.56,'bell'],[.52,.54,1020,1570,.52,'bell']],
-    secret:[[0,.20,450,690,.5,'sine'],[.16,.2,600,860,.54,'triangle'],[.35,.23,880,1170,.54,'sine'],[.55,.42,1080,1620,.55,'triangle']],
-    enabled:[[0,.15,660,910,.62,'triangle']]
+    munch:[[0,.095,290,180,.49,'wood'],[.125,.10,240,145,.43,'wood'],[.28,.10,220,125,.36,'grass']],
+    praise:[[0,.09,600,450,.40,'pluck'],[.105,.09,840,690,.37,'chip'],[.22,.17,1050,960,.35,'crystal']],
+    levelUp:[[0,.10,523,523,.42,'chip'],[.13,.10,659,659,.43,'chip'],[.27,.11,784,784,.45,'chip'],[.43,.25,1047,1175,.48,'crystal']],
+    comboNice:[[0,.095,720,580,.43,'pluck'],[.13,.13,950,1090,.39,'chip']],
+    comboGreat:[[0,.07,600,600,.45,'chip'],[.115,.085,760,760,.42,'chip'],[.25,.2,980,1090,.45,'crystal']],
+    comboFever:[[0,.09,520,520,.49,'chip'],[.12,.09,680,680,.47,'chip'],[.24,.10,880,880,.48,'chip'],[.38,.14,1120,1120,.44,'pulse'],[.56,.25,1320,1550,.47,'crystal']],
+    evolve:[[0,.12,310,160,.43,'stone'],[.18,.14,530,530,.44,'chip'],[.34,.16,740,840,.49,'crystal'],[.53,.31,1060,1310,.48,'crystal']],
+    secret:[[0,.10,380,190,.42,'stone'],[.16,.12,590,590,.40,'chip'],[.31,.16,850,960,.44,'pulse'],[.53,.2,1150,1490,.48,'crystal'],[.8,.37,1550,780,.43,'crystal']],
+    enabled:[[0,.08,600,750,.36,'chip']]
   };
   function soundNotes(kind,index=selectedPet){
     if(['hello','eatVoice','happyVoice'].includes(kind))return creatureNotes(kind,index);
@@ -1279,7 +1281,7 @@
     const ctx=audioContext;
     const at=ctx.currentTime+0.015+offset;
     const osc=ctx.createOscillator(),gain=ctx.createGain();
-    osc.type=(type==='chirp'||type==='bright')?'triangle':'sine';
+    osc.type=['chip','pulse','peep','crystal'].includes(type)?'square':['wood','pluck','grass','stone'].includes(type)?'triangle':'sine';
     osc.frequency.setValueAtTime(from,at);
     osc.frequency.exponentialRampToValueAtTime(Math.max(1,to),at+duration*.8);
     gain.gain.setValueAtTime(.0001,at);
@@ -1316,19 +1318,30 @@
       const length=Math.floor(duration*rate);
       for(let i=0;i<length&&startIndex+i<count;i++){
         const progress=i/Math.max(length-1,1);
-        const hz=startHz*Math.pow(endHz/startHz,progress);
-        const vibrato=wave==='meow'?1+.075*Math.sin(i/rate*Math.PI*2*8):wave==='chirp'?1+.018*Math.sin(i/rate*Math.PI*2*25):1;
-        phase+=2*Math.PI*hz*vibrato/rate;
-        const fundamental=Math.sin(phase),triangle=2*Math.asin(fundamental)/Math.PI;
-        const signal=wave==='triangle'?triangle:
-          wave==='chirp'?triangle*.75+Math.sin(phase*2)*.17:
-          wave==='bright'?triangle*.63+Math.sin(phase*3)*.22:
-          wave==='warm'?fundamental*.8+Math.sin(phase*2)*.18:
-          wave==='meow'?fundamental*.79+Math.sin(phase*2)*.12:
-          wave==='bell'?fundamental*.72+Math.sin(phase*2.45)*.17:fundamental;
-        const attack=Math.min(1,i/(rate*.012));
-        const release=Math.min(1,(length-i)/(rate*.045));
-        samples[startIndex+i]+=signal*amplitude*attack*release;
+        const rawHz=startHz*Math.pow(endHz/startHz,progress);
+        const bitType=['chip','pulse','peep','pluck'].includes(wave);
+        const hz=bitType?startHz*Math.pow(2,Math.round(12*Math.log2(rawHz/startHz))/12):rawHz;
+        phase+=2*Math.PI*hz/rate;
+        const cycle=(phase/(2*Math.PI))%1;
+        const sin=Math.sin(phase),triangle=2*Math.asin(sin)/Math.PI;
+        // Deterministic, lightweight crushed-noise component for tactile blocks.
+        const seed=(Math.imul((i+7),Math.floor(startHz)+53)^0xA53C9)>>>0;
+        const grit=((seed%4096)/2048)-1;
+        let signal=wave==='chip'?cycle<.5?1:-1:
+          wave==='pulse'?cycle<.28?1:-.65:
+          wave==='peep'?cycle<.20?1:-.55:
+          wave==='pluck'?.69*triangle+.25*grit*(1-progress):
+          wave==='wood'?.75*triangle+.26*grit*(1-progress):
+          wave==='stone'?.46*triangle+.57*grit*(1-progress):
+          wave==='grass'?.25*triangle+.61*grit*(1-progress):
+          wave==='crystal'?.64*sin+.27*Math.sin(phase*2.33):triangle;
+        // 8-bit quantisation supplies the warm chiptune texture.
+        signal=Math.round(signal*(wave==='crystal'?24:10))/(wave==='crystal'?24:10);
+        const attack=Math.min(1,i/(rate*(bitType?.003:.006)));
+        const release=Math.min(1,(length-i)/(rate*(wave==='wood'||wave==='stone'?.075:.032)));
+        const percussion=['wood','stone','grass','pluck'].includes(wave);
+        const decay=percussion?Math.pow(1-progress,wave==='wood'?2.4:1.6):1;
+        samples[startIndex+i]+=signal*amplitude*attack*release*decay;
       }
     }
     const data=new ArrayBuffer(44+count*2), view=new DataView(data);
