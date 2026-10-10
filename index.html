@@ -1397,7 +1397,7 @@
       const strong=mouthPeak>=Math.max(.27,baseline+MOUTH_STRONG_OPEN_DELTA);
       if(closing){
         mouthCloseFrames++;
-        const moderate=mouthPeak-baseline>=.085;
+        const moderate=mouthPeak>=Math.max(.215,baseline+.085);
         if(duration>=MIN_OPEN_MS&&(strong||moderate&&mouthCloseFrames>=2)){
           resetGesture();
           return praise('auto')?'bite':'cooldown';
