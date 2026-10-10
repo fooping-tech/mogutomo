@@ -334,7 +334,7 @@
         <canvas id="detectionCanvas" class="detection-canvas" aria-hidden="true"></canvas>
         <div class="preview-top"><span class="live">● LIVE</span><button id="expandPreview" class="expand-preview" type="button" aria-label="カメラ映像を拡大" aria-pressed="false">⤢</button></div>
         <span id="detectionState" class="detection-state" data-state="search" role="status" aria-live="polite">👀 かおをさがすよ</span>
-        <div class="detection-chips" aria-hidden="true"><span id="faceChip">顔 ・</span><span id="handChip">手 ・</span></div>
+        <div class="detection-chips" aria-hidden="true"><span id="faceChip">顔 ・</span><span id="mouthChip">口 ・</span></div>
         <div id="cameraBiteEffect" class="camera-bite-effect" aria-hidden="true"><span class="burst one">✨</span><span class="burst two">🌟</span><span class="bite-label" id="cameraBiteLabel">ぱくっ！</span><span class="burst three">💛</span></div>
       </div>
       <div class="hearts" id="hearts" aria-hidden="true">
@@ -362,7 +362,7 @@
   </section>
   <section class="camera-row" aria-label="カメラ設定">
     <div class="camera-symbol" aria-hidden="true">📷</div>
-    <div class="camera-label"><strong>カメラで みまもる</strong><span id="cameraDescription">おかおと おくちへのてのうごきを みるよ</span></div>
+    <div class="camera-label"><strong>カメラで みまもる</strong><span id="cameraDescription">おくちを おおきく あけて とじると はんのうするよ</span></div>
     <button type="button" class="camera-btn" id="cameraButton">カメラ ON</button>
   </section>
   <details id="cameraError" class="camera-error" hidden><summary>カメラのエラー詳細</summary><code id="cameraErrorText"></code></details>
@@ -392,22 +392,23 @@
   'use strict';
   const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304';
   const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
-  const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
   const $ = id => document.getElementById(id);
   const video = $('video'), buddy = $('buddy'), saying = $('saying'), statusText = $('statusText'), statusPill = $('statusPill');
   const stage = $('stage'), hearts = $('hearts');
   const cameraButton = $('cameraButton'), preview = $('preview'), voiceButton = $('voiceButton'), effectsButton = $('effectsButton'), toast = $('toast');
   const cameraError = $('cameraError'), cameraErrorText = $('cameraErrorText');
   const detectionCanvas = $('detectionCanvas'), detectionState = $('detectionState');
-  const faceChip = $('faceChip'), handChip = $('handChip'), cameraBiteEffect = $('cameraBiteEffect');
+  const faceChip = $('faceChip'), mouthChip = $('mouthChip'), cameraBiteEffect = $('cameraBiteEffect');
   const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
   const distance = (a,b,w=1,h=1) => Math.hypot((a.x-b.x)*w,(a.y-b.y)*h);
   const praiseWords = ['ぱくっ！すてき！✨','おいしそう！よかったね！','もぐもぐ できたね！👏','たべたね！うれしいな！','いっしょに たべると おいしいね！'];
   const foods = ['🥕','🍙','🥦','🍓','🥔'];
-  let soundOn = true, effectsOn = true, audioContext = null, stream = null, faceLandmarker = null, handLandmarker = null, starting = false;
+  let soundOn = true, effectsOn = true, audioContext = null, stream = null, faceLandmarker = null, starting = false;
   let requestId = 0, frameId = null, lastInference = 0, faceVisible = false, lastFaceTime = 0;
   let mealCount = 0, lastPraiseAt = -Infinity, lastInviteAt = performance.now(), lastActionAt = 0, munchTimeout=null, toastTimeout=null, happyTimeout=null;
-  let waitingForHandToLeave = false, handEnteredAt = 0, handNearFrames = 0, mouthOpened = false;
+  const MOUTH_OPEN_THRESHOLD=.22, MOUTH_CLOSE_THRESHOLD=.09;
+  const MIN_OPEN_MS=260, MAX_OPEN_MS=4200;
+  let mouthPhase='arming', mouthClosedFrames=0, mouthOpenFrames=0, mouthCloseFrames=0, mouthOpenedAt=0;
   let helloSaid = false, frameAvgMs=0, cameraBiteTimeout=null, cameraBiteUntil=0;
 
   const LEVEL_STEPS=[0,10,25,45,70,100,135,175,220,270];
@@ -823,22 +824,20 @@
   }
 
   const detectionNames={
-    loading:'⏳ AIじゅんび中',search:'👀 かおをさがすよ',
-    face:'😊 かおを検出',hand:'🖐️ てを検出',
-    near:'🥄 おくちに近づいた！',bite:'✨ ぱくっ！',
-    error:'⚠️ AIはおやすみ'
+    loading:'⏳ AIじゅんび中',search:'👀 かおをさがすよ',face:'🙂 おくちを みてるよ',
+    open:'😮 おくちが あいた！',closing:'🥄 とじたら ぱくっ！',
+    bite:'✨ ぱくっ！',error:'⚠️ AIはおやすみ'
   };
-  function detectionStatus(next,face=false,hand=false){
-    // A bite celebration stays visible even if subsequent frames only see the face.
+  function detectionStatus(next,face=false,mouthOpen=false){
     if(next!=='bite'&&performance.now()<cameraBiteUntil)return;
     if(detectionState.dataset.state!==next){
       detectionState.dataset.state=next;
       detectionState.textContent=detectionNames[next]||detectionNames.search;
     }
     faceChip.classList.toggle('detected',!!face);
-    handChip.classList.toggle('detected',!!hand);
+    mouthChip.classList.toggle('detected',!!mouthOpen);
     faceChip.textContent=face?'顔 ✓':'顔 ・';
-    handChip.textContent=hand?'手 ✓':'手 ・';
+    mouthChip.textContent=!face?'口 ・':mouthOpen?'口 あいた':'口 とじた';
   }
   function clearDetectionCanvas(){
     const ctx=detectionCanvas.getContext?.('2d');
@@ -855,7 +854,7 @@
   function cameraBiteBurst(source){
     if(!stream||!preview.classList.contains('visible'))return;
     cameraBiteUntil=performance.now()+1400;
-    detectionStatus('bite',faceChip.classList.contains('detected'),handChip.classList.contains('detected'));
+    detectionStatus('bite',faceChip.classList.contains('detected'),mouthChip.classList.contains('detected'));
     $('cameraBiteLabel').textContent=source==='auto'?'ぱくっ！✨':'やったね！✨';
     cameraBiteEffect.classList.remove('active');
     void cameraBiteEffect.offsetWidth;
@@ -866,41 +865,31 @@
       cameraBiteUntil=0;
     },1450);
   }
-  function drawDetection(face,hands,near){
+  function drawDetection(face,mouthState='face'){
     const ctx=detectionCanvas.getContext?.('2d');
     if(!ctx)return;
-    const cw=detectionCanvas.clientWidth, ch=detectionCanvas.clientHeight;
+    const cw=detectionCanvas.clientWidth,ch=detectionCanvas.clientHeight;
     if(!cw||!ch)return;
     const dpr=Math.min(window.devicePixelRatio||1,2);
     const bw=Math.round(cw*dpr),bh=Math.round(ch*dpr);
-    if(detectionCanvas.width!==bw||detectionCanvas.height!==bh){
-      detectionCanvas.width=bw; detectionCanvas.height=bh;
-    }
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,cw,ch);
+    if(detectionCanvas.width!==bw||detectionCanvas.height!==bh){detectionCanvas.width=bw;detectionCanvas.height=bh;}
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,cw,ch);
     if(!face)return;
     const vw=video.videoWidth||640,vh=video.videoHeight||480;
-    const scale=Math.max(cw/vw,ch/vh), dx=(cw-vw*scale)*.5,dy=(ch-vh*scale)*.5;
+    const scale=Math.max(cw/vw,ch/vh),dx=(cw-vw*scale)*.5,dy=(ch-vh*scale)*.5;
     const project=p=>({x:p.x*vw*scale+dx,y:p.y*vh*scale+dy});
     const mouth=project({x:(face[13].x+face[14].x)*.5,y:(face[13].y+face[14].y)*.5});
+    const lipLeft=project(face[61]),lipRight=project(face[291]);
     const upper=project(face[10]),chin=project(face[152]),left=project(face[234]),right=project(face[454]);
-    const x=(left.x+right.x)*.5,y=(upper.y+chin.y)*.5;
-    const rx=Math.abs(right.x-left.x)*.57,ry=Math.abs(chin.y-upper.y)*.55;
-    ctx.strokeStyle='#72FFD0';ctx.lineWidth=2.3;
-    ctx.setLineDash([5,3]);ctx.beginPath();ctx.ellipse(x,y,Math.max(8,rx),Math.max(10,ry),0,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
-    // Mark the mouth and the visible fingertips, not all 478 landmarks.
-    ctx.fillStyle=near?'#FFC86C':'#EFFFF8';
-    ctx.strokeStyle=near?'#FFCF6C':'#21AD78';
-    ctx.lineWidth=2.1;ctx.beginPath();ctx.arc(mouth.x,mouth.y,near?7:4.5,0,Math.PI*2);ctx.fill();ctx.stroke();
-    for(const hand of hands||[]){
-      const fingertips=[4,8,12,16,20].filter(i=>hand[i]);
-      for(const i of fingertips){
-        const point=project(hand[i]);
-        if(point.x<0||point.x>cw||point.y<0||point.y>ch)continue;
-        ctx.fillStyle=near?'#FFCA61':'#81DDFB';
-        ctx.beginPath();ctx.arc(point.x,point.y,2.8,0,Math.PI*2);ctx.fill();
-      }
-    }
+    const cx=(left.x+right.x)*.5,cy=(upper.y+chin.y)*.5;
+    ctx.strokeStyle='#72FFD0';ctx.lineWidth=2.3;ctx.setLineDash([5,3]);ctx.beginPath();
+    ctx.ellipse(cx,cy,Math.max(8,Math.abs(right.x-left.x)*.57),Math.max(10,Math.abs(chin.y-upper.y)*.55),0,0,Math.PI*2);
+    ctx.stroke();ctx.setLineDash([]);
+    const opened=mouthState==='open'||mouthState==='closing'||mouthState==='bite';
+    ctx.fillStyle=opened?'#FFD16D80':'#EFFFF866';
+    ctx.strokeStyle=opened?'#FFD16D':'#23BA7E';ctx.lineWidth=3;ctx.beginPath();
+    ctx.ellipse(mouth.x,mouth.y,Math.max(7,Math.abs(lipRight.x-lipLeft.x)*.58),opened?11:7,0,0,Math.PI*2);
+    ctx.fill();ctx.stroke();
   }
 
   function munch(withSpeech=true){
@@ -924,7 +913,7 @@
     if(source==='auto' && (now-lastPraiseAt < 8500 || !$('autoPraise').checked)) return;
     mealCount++;
     lastPraiseAt=now; lastActionAt=now; lastInviteAt=now;
-    waitingForHandToLeave=false; handNearFrames=0; mouthOpened=false;
+    resetGesture();
     const result=rewardBite();
     celebrate();
     sparkle();
@@ -933,46 +922,45 @@
     if(!result.unlocked) say(currentPet().name+'：'+praiseWords[(mealCount-1)%praiseWords.length]);
     if(navigator.vibrate && source==='manual') navigator.vibrate(30);
   }
-  function resetGesture(){waitingForHandToLeave=false;handEnteredAt=0;handNearFrames=0;mouthOpened=false;}
-
-  function isLikelyBite(duration){
-    if(duration>=4200)return false;
-    // Brief contact requires visible mouth opening; slower contact may be a spoon bite.
-    return mouthOpened ? handNearFrames>=2 && duration>=300 : handNearFrames>=3 && duration>=550;
+  function resetGesture(){
+    mouthPhase='arming';mouthClosedFrames=0;mouthOpenFrames=0;mouthCloseFrames=0;mouthOpenedAt=0;
   }
-  function observeBite(face,hands,now){
-    if (!$('autoPraise').checked || !hands?.length) {
-      if(waitingForHandToLeave && now-handEnteredAt>6000) resetGesture();
-      // When the hand disappears after visiting the mouth, this is a valid withdrawal.
-      if(!hands?.length && waitingForHandToLeave && isLikelyBite(now-handEnteredAt)){praise('auto');resetGesture();}
-      return;
+  function observeMouth(face,now){
+    const w=video.videoWidth||640,h=video.videoHeight||480;
+    const faceWidth=distance(face[234],face[454],w,h);
+    const mouthWidth=distance(face[61],face[291],w,h);
+    if(faceWidth<w*.095||mouthWidth<w*.018){resetGesture();return 'face';}
+    // Lip gap divided by mouth width works without knowing whether food is hand-fed or spoon-fed.
+    const openness=distance(face[13],face[14],w,h)/mouthWidth;
+    if(!Number.isFinite(openness)){resetGesture();return 'face';}
+    const wideOpen=openness>=MOUTH_OPEN_THRESHOLD,closed=openness<=MOUTH_CLOSE_THRESHOLD;
+    if(!$('autoPraise').checked){resetGesture();return wideOpen?'open':'face';}
+    if(mouthPhase==='arming'){
+      // First see the mouth closed twice; do not count an already-open mouth at startup.
+      mouthClosedFrames=closed?mouthClosedFrames+1:0;
+      if(mouthClosedFrames>=2)mouthPhase='ready';
+      return wideOpen?'open':'face';
     }
-    const mouth={x:(face[13].x+face[14].x)/2,y:(face[13].y+face[14].y)/2};
-    const left=face[234],right=face[454],top=face[13],bottom=face[14];
-    const w=video.videoWidth||640, h=video.videoHeight||480;
-    const faceW=distance(left,right,w,h);
-    if (faceW < w*.095) {resetGesture();return;}
-    const mouthW=distance(face[61],face[291],w,h);
-    const openness=distance(top,bottom,w,h)/Math.max(mouthW,1);
-    let near=false;
-    for(const hand of hands){
-      // A fingertip approaching the lips and then moving away is a *bite candidate*.
-      for(const point of [4,8,12,16,20]){
-        if(distance(hand[point],mouth,w,h)<faceW*.35){near=true;break;}
+    if(mouthPhase==='ready'){
+      if(wideOpen){
+        if(mouthOpenFrames===0)mouthOpenedAt=now;
+        mouthOpenFrames++;
+        if(mouthOpenFrames>=2){mouthPhase='opened';mouthCloseFrames=0;}
+      }else mouthOpenFrames=0;
+      return wideOpen?'open':'face';
+    }
+    if(mouthPhase==='opened'){
+      if(now-mouthOpenedAt>MAX_OPEN_MS){resetGesture();return wideOpen?'open':'face';}
+      mouthCloseFrames=closed?mouthCloseFrames+1:0;
+      if(mouthCloseFrames>=2){
+        const duration=now-mouthOpenedAt;
+        resetGesture();
+        if(duration>=MIN_OPEN_MS){praise('auto');return 'bite';}
+        return 'face';
       }
-      if(near) break;
+      return closed?'closing':'open';
     }
-    if(near){
-      if(!waitingForHandToLeave){ waitingForHandToLeave=true;handEnteredAt=now;handNearFrames=0;mouthOpened=false; }
-      handNearFrames++;
-      if(openness>.105) mouthOpened=true;
-    } else if(waitingForHandToLeave){
-      const duration=now-handEnteredAt;
-      // Avoid praising on a one-frame hand detection glitch.
-      if(isLikelyBite(duration)){praise('auto');}
-      resetGesture();
-    }
-    if(waitingForHandToLeave && now-handEnteredAt>4200) resetGesture();
+    resetGesture();return 'face';
   }
 
   async function createTask(Task,vision,options){
@@ -1024,7 +1012,7 @@
     resetDetection();
     video.pause(); video.srcObject=null; preview.classList.remove('visible');
     cameraButton.textContent='カメラ ON'; cameraButton.disabled=false;
-    $('cameraDescription').textContent='おかおと おくちへのてのうごきを みるよ';
+    $('cameraDescription').textContent='おくちを おおきく あけて とじると はんのうするよ';
     faceVisible=false;lastFaceTime=0;resetGesture();look();starting=false;
     buddy.classList.remove('is-happy'); stage?.querySelector('.stage-shadow')?.classList.remove('happy');
     status('カメラをつけると めが あうよ 👀');
@@ -1040,7 +1028,6 @@
         // detectForVideo is synchronous; throttle for mobile battery/heat.
         const faces=faceLandmarker.detectForVideo(video,now).faceLandmarks;
         const face=faces?.[0];
-        let hands=[];
         if(face){
           lastFaceTime=now;
           if(!faceVisible){
@@ -1050,23 +1037,21 @@
           const center=face[1];
           // Preview is mirrored, so reverse horizontal input for the avatar eyes.
           look(clamp((.5-center.x)*2.3,-1,1),clamp((center.y-.48)*2.5,-1,1));
-          if(handLandmarker){
-            hands=handLandmarker.detectForVideo(video,now).landmarks||[];
-            observeBite(face,hands,now);
-          }
-          drawDetection(face,hands,waitingForHandToLeave);
-          detectionStatus(waitingForHandToLeave?'near':hands.length?'hand':'face',true,hands.length>0);
+          const mouthState=observeMouth(face,now);
+          drawDetection(face,mouthState);
+          detectionStatus(mouthState==='bite'?'bite':mouthState==='open'?'open':mouthState==='closing'?'closing':'face',
+                          true,mouthState==='open'||mouthState==='closing');
         } else if(now-lastFaceTime>1100){
           if(faceVisible){faceVisible=false;status('おかおを さがしてるよ 👀','busy');}
           resetGesture();look();
-          drawDetection(null,[],false);
+          drawDetection(null);
           detectionStatus('search');
         }
         frameAvgMs=frameAvgMs*.85+(performance.now()-start)*.15;
       } catch(e) {
         // Keep the camera preview usable when only face analysis fails.
         showCameraIssue('カメラ映像のAI解析',e);
-        faceLandmarker=null; handLandmarker=null;
+        faceLandmarker=null;
         faceVisible=false; resetGesture(); look();
         clearDetectionCanvas(); detectionStatus('error');
         status('映像は映るよ。AI解析が止まったので手動で遊んでね。','busy');
@@ -1125,31 +1110,23 @@
     }
     try{
       if(!faceLandmarker){
-        const {FilesetResolver,FaceLandmarker,HandLandmarker}=await loadVisionLibrary();
+        const {FilesetResolver,FaceLandmarker}=await loadVisionLibrary();
         if(runId!==requestId)return;
         status('AIモデルを読み込んでいるよ…','busy');
         const vision=await FilesetResolver.forVisionTasks(`${CDN}/wasm`);
         if(runId!==requestId)return;
         faceLandmarker=await createTask(FaceLandmarker,vision,{baseOptions:{modelAssetPath:FACE_MODEL},runningMode:'VIDEO',numFaces:1,minFaceDetectionConfidence:.55,minFacePresenceConfidence:.5,minTrackingConfidence:.5});
-        if(runId!==requestId)return;
-        try{
-          handLandmarker=await createTask(HandLandmarker,vision,{baseOptions:{modelAssetPath:HAND_MODEL},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.5,minHandPresenceConfidence:.5,minTrackingConfidence:.5});
-        }catch(handError){
-          handLandmarker=null;
-          showCameraIssue('手の動き検出（顔追跡は動作中）',handError);
-          showToast('顔追跡は動くよ！手の検出が使えないときは「たべたよ！」を押してね。');
-        }
       }
       if(runId!==requestId)return;
       cameraButton.textContent='カメラ OFF';cameraButton.disabled=false;
-      $('cameraDescription').textContent=handLandmarker?'おかおと てのうごきを みているよ':'おかおを みているよ';
+      $('cameraDescription').textContent='おくちを おおきく あけて とじると ぱくっ！';
       status('おかおを さがしてるよ 👀','busy');
       lastInference=0;helloSaid=false;resetGesture();
       lastInviteAt=performance.now();lastActionAt=lastInviteAt;
       frameId=requestAnimationFrame(()=>loop(runId));
     }catch(e){
       if(runId!==requestId)return;
-      faceLandmarker=null;handLandmarker=null;
+      faceLandmarker=null;
       showCameraIssue('AIモデルの取得・初期化',e);
       status('カメラはOK。AIの読み込みに失敗したよ','busy');
       detectionStatus('error');
