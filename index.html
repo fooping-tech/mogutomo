@@ -465,7 +465,7 @@
   function cameraBiteBurst(source){
     if(!stream||!preview.classList.contains('visible'))return;
     cameraBiteUntil=performance.now()+1400;
-    detectionStatus('bite',true,source==='auto');
+    detectionStatus('bite',faceChip.classList.contains('detected'),handChip.classList.contains('detected'));
     $('cameraBiteLabel').textContent=source==='auto'?'ぱくっ！✨':'やったね！✨';
     cameraBiteEffect.classList.remove('active');
     void cameraBiteEffect.offsetWidth;
