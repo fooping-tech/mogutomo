@@ -16,7 +16,7 @@ assert.ok(script.includes(marker),'Test-injection anchor still present');
 const source=script.replace(marker,[
   "  window.__testing={",
   "    getState:()=>({xp:[...petXP],events:[...achievements],selected:selectedPet,session:sessionBites,secret:secretUnlocked,volume,voice:soundOn,auto:$('autoPraise').checked}),",
-  "    observeMouth,stageFor,soundNotes,resetGesture",
+  "    observeMouth,stageFor,soundNotes,resetGesture,updateCameraLayout",
   "  };",
   marker
 ].join('\n'));
@@ -34,7 +34,7 @@ function makeApp(memory=new Map(),opts={}){
   class Element{
     constructor(id){
       this.id=id;this.checked=true;this.disabled=false;
-      this.hidden=['welcomeOverlay','settingsOverlay','dexOverlay'].includes(id);
+      this.hidden=['welcomeOverlay','settingsOverlay','dexOverlay','cameraSession','manualFallback'].includes(id);
       this.classList=new ClassList();this.dataset={};this.textContent='';this.innerHTML='';
       this.value='60';this.style={width:'',setProperty(){}};
       this.offsetWidth=260;this.clientWidth=190;this.clientHeight=230;
@@ -218,4 +218,33 @@ test('reduced motion avoids confetti, while manual fallback remains usable',()=>
   app.click('startPlaying');app.click('ateButton');
   assert.equal(app.state().xp[0],10);
   assert.equal(app.get('app').classList.contains('quality-low'),true);
+});
+
+test('camera preview occupies the button slot without covering avatar; manual fallback stays accessible',()=>{
+  const stagePos=html.indexOf('<div class="stage" id="stage">');
+  const stageEnd=html.indexOf('  </section>',stagePos);
+  const controlsPos=html.indexOf('<section class="controls"');
+  const controlsEnd=html.indexOf('  </section>',controlsPos);
+  const previewPos=html.indexOf('id="preview"');
+  assert.ok(stagePos>=0&&stageEnd>stagePos&&controlsPos>stageEnd,
+    'Stage and controls are separate areas');
+  assert.ok(previewPos>controlsPos&&previewPos<controlsEnd,
+    'Video preview is inside the controls, not the stage');
+  assert.match(html,/\.app\.camera-active \.controls>\.action\{display:none\}/);
+  assert.match(html,/\.camera-session \.preview\.expanded\{/);
+  const app=makeApp();
+  assert.equal(app.get('cameraSession').hidden,true);
+  app.testing.updateCameraLayout(true);
+  assert.equal(app.get('cameraSession').hidden,false);
+  assert.equal(app.get('manualFallback').hidden,true);
+  assert.equal(app.get('app').classList.contains('camera-active'),true);
+  app.testing.updateCameraLayout(true,true);
+  assert.equal(app.get('manualFallback').hidden,false);
+  app.click('startPlaying');
+  app.click('manualFallback');
+  assert.equal(app.state().xp[0],10,'Fallback should still grant ordinary XP');
+  app.testing.updateCameraLayout(false);
+  assert.equal(app.get('cameraSession').hidden,true);
+  assert.equal(app.get('manualFallback').hidden,true);
+  assert.equal(app.get('app').classList.contains('camera-active'),false);
 });
