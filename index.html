@@ -570,6 +570,67 @@
     .xp-pop{font-family:ui-monospace,monospace;text-shadow:3px 3px #604262}
     .camera-side .detection-state,.camera-side-chip{box-shadow:3px 3px 0 #51415955}
     @media(prefers-reduced-motion:reduce){.stage.fever-mode:before{animation:none}}
+
+    /* Character-first layout: the top half is one self-contained playable stage. */
+    #petSubhead{display:none}
+    .play-frame{scroll-snap-align:center}
+    #stage{height:clamp(390px,55svh,610px);margin:8px -14px 0;overflow:hidden;
+      position:relative;isolation:isolate}
+    #stage:before{top:0;bottom:0;left:0;right:0;height:100%;box-sizing:border-box;z-index:-1}
+    .stage-topbar{position:absolute;top:10px;left:10px;right:10px;z-index:15;display:flex;
+      align-items:center;gap:6px;pointer-events:none}
+    .stage-topbar .pet-panel{margin:0;max-width:none;flex:1;padding:0 4px;pointer-events:auto;
+      background:#FFF9EDEC;border:3px solid #55455E;border-radius:4px;
+      box-shadow:3px 3px 0 #51415C77}
+    .stage-topbar .pet-label strong{font-size:clamp(17px,4.6vw,22px)}
+    .stage-topbar .pet-label span{font-size:clamp(10px,2.8vw,12px);line-height:1.25}
+    .stage-topbar .pet-nav{width:36px;height:40px;border:0!important;box-shadow:none!important;
+      font-size:23px;background:transparent;flex-shrink:0}
+    .stage-dex{pointer-events:auto;align-self:stretch;flex:0 0 39px;min-width:39px;
+      border:3px solid #55455E;background:#FFE9AB;color:#584360;
+      border-radius:3px;font-size:24px;font-weight:1000;box-shadow:3px 3px 0 #51415C77}
+    .stage-bubble{position:absolute;z-index:16;bottom:10px;left:12px;right:12px;
+      width:auto;max-width:none;margin:0;min-height:45px;padding:9px 13px;
+      box-sizing:border-box;pointer-events:none;box-shadow:4px 4px #54436455!important;
+      background:#FFFBEDf2!important}
+    .stage-bubble:after{display:none}
+    #saying{font-size:clamp(15px,4.1vw,20px);line-height:1.2}
+    .pet-mover{position:absolute;left:50%;top:51%;width:min(91vw,43svh,450px);
+      aspect-ratio:1;max-width:94%;z-index:8;
+      transform:translate(calc(-50% + var(--pet-x,0px)),calc(-50% + var(--pet-y,0px)));
+      touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;
+      will-change:transform}
+    .pet-mover.dragging{cursor:grabbing}
+    .pet-mover .buddy,.app.camera-active .pet-mover .buddy{
+      position:relative;width:100%!important;height:100%!important;touch-action:none}
+    .pet-mover .voxel-canvas{width:100%;height:100%;image-rendering:pixelated}
+    .stage .stage-shadow{bottom:11%;left:21%;width:58%;z-index:1}
+    .stage .hearts{z-index:13}
+    .stage .screen-badge{top:19%}
+    .stage .level-flash{z-index:23}
+    .app.camera-active .stage{height:clamp(315px,47svh,510px);margin:4px -14px 0}
+    .app.camera-active .pet-mover{width:min(90vw,38svh,385px);top:51%}
+    .app.camera-active .stage-bubble{bottom:8px;min-height:38px;padding:7px 10px}
+    .app.camera-active .stage-pet-panel{margin:0;min-height:43px}
+    .app.camera-active .status{margin:4px 0}
+    .app.camera-active .roster-card,.app.camera-active .intro{display:none}
+    .app.camera-active .combo-bar{margin-bottom:2px}
+    /* On short phones, preserve a usable two-camera composition. */
+    @media(max-height:690px){
+      #stage{height:clamp(335px,51svh,450px)}
+      .app.camera-active .stage{height:clamp(265px,41svh,350px)}
+      .app.camera-active .pet-mover{width:min(86vw,34svh,340px)}
+      .app.camera-active .stage-bubble{font-size:12px;min-height:34px}
+      .app.camera-active .camera-session .camera-view-layout .preview{height:clamp(145px,24svh,195px)}
+    }
+    @media(max-width:350px){
+      .stage-topbar{left:5px;right:5px}
+      .stage-topbar .pet-panel{gap:2px}
+      .stage-topbar .pet-label strong{font-size:16px}
+      .stage-topbar .pet-label span{font-size:10px}
+      .stage-topbar .pet-nav{width:27px}
+      .stage-dex{flex-basis:32px;min-width:32px}
+    }
   </style>
 </head>
 <body>
@@ -597,21 +658,28 @@
     <p id="collectionHint">5ひき みんな LV.10で ひみつのこが…？ ✨</p><div id="evolutionHint" class="evolution-hint"></div><div class="growth-toolbar"><span>アイコンをタップして きりかえ</span><button id="openDex" class="grow-btn" type="button">📖 ずかん</button></div>
   </div>
   <div id="comboBar" class="combo-bar" role="status" aria-live="polite"><span>🍽️ きょうの ぱくっ</span><span id="comboCount" class="combo-count">0かい</span><span id="comboPill" class="combo-pill">いっしょに たのしもう</span></div>
-  <section class="pet-panel" aria-label="おともだちをえらぶ">
-    <button id="prevPet" class="pet-nav" type="button" aria-label="前のおともだち">‹</button>
-    <div class="pet-label"><strong id="petName">もぐちゃん</strong><span id="petDescription">うさぎ ・ 1 / 5 ・ よこにスワイプしてね</span></div>
-    <button id="nextPet" class="pet-nav" type="button" aria-label="次のおともだち">›</button>
-  </section>
+
   <section class="play-frame" id="playFrame" aria-label="キャラとカメラの表示エリア">
   <section aria-label="もぐちゃんのキャラクター">
-    <div class="bubble" role="status" aria-live="polite"><p id="saying">いっしょに ごはん たべよ！</p></div>
+
     <div class="stage" id="stage">
+      <div class="stage-topbar">
+  <section class="pet-panel stage-pet-panel" aria-label="おともだちをえらぶ">
+    <button id="prevPet" class="pet-nav" type="button" aria-label="前のおともだち">‹</button>
+    <div class="pet-label"><strong id="petName">もぐちゃん</strong><span id="petDescription">うさぎ ・ 1 / 5 ・ ドラッグでうごかせるよ</span></div>
+    <button id="nextPet" class="pet-nav" type="button" aria-label="次のおともだち">›</button>
+  </section>
+        <button id="openDexStage" class="stage-dex" type="button" aria-label="おともだち図鑑を開く">▦</button>
+      </div>
+      <div class="bubble stage-bubble" role="status" aria-live="polite"><p id="saying">いっしょに ごはん たべよ！</p></div>
       <span class="decor one" aria-hidden="true">✳</span><span class="decor two" aria-hidden="true">♥</span><span class="decor three" aria-hidden="true">✦</span>
       <div class="stage-shadow" aria-hidden="true"></div><div id="confettiField" class="confetti-field" aria-hidden="true"></div><div id="feedbackBurst" class="feedback-burst" aria-hidden="true"></div><div id="screenBadge" class="screen-badge" aria-hidden="true"></div><div id="xpPop" class="xp-pop" aria-hidden="true">+10 XP</div><div id="levelFlash" class="level-flash" aria-hidden="true">LEVEL UP!</div>
-      <div id="buddy" class="buddy" tabindex="0" aria-label="タップすると反応する、育てるおともだち" role="img">
+      <div id="petMover" class="pet-mover">
+       <div id="buddy" class="buddy" tabindex="0" aria-label="タップでなでなで、ドラッグで動かせるおともだち" role="img">
         <canvas id="voxelCanvas" class="voxel-canvas" width="360" height="360" aria-hidden="true"></canvas>
         <span id="speciesMark" class="species-mark" aria-hidden="true"></span>
         <div class="food-emoji" aria-hidden="true">🥕</div>
+       </div>
       </div>
       <div class="hearts" id="hearts" aria-hidden="true">
         <span class="heart" style="--hx:-58px;--hy:-6px">♥</span>
