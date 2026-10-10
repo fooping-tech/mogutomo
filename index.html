@@ -232,7 +232,7 @@
   <section class="intro" aria-label="アプリのタイトル">
     <p class="eyebrow">ごはんの じかんが たのしくなる</p>
     <h1>いっしょに <span class="pink">ぱくっ！</span></h1>
-    <p class="subhead">もぐちゃんと たのしく もぐもぐしよう</p>
+    <p class="subhead" id="petSubhead">もぐちゃんと たのしく もぐもぐしよう</p>
   </section>
   <section class="pet-panel" aria-label="おともだちをえらぶ">
     <button id="prevPet" class="pet-nav" type="button" aria-label="前のおともだち">‹</button>
@@ -382,6 +382,7 @@
     buddy.classList.toggle('is-max',lv===10);
     $('speciesMark').textContent=lv===10?'👑':lv>=5?'✨':pet.mark;
     $('petName').textContent=pet.emoji+' '+pet.name;
+    $('petSubhead').textContent=pet.name+'と たのしく もぐもぐしよう';
     $('petDescription').textContent=pet.kind+' ・ '+(selectedPet+1)+' / '+collectionCount+' ・ ↔スワイプ';
     $('levelLabel').textContent=lv===10?'LV.10 MAX ✨':'LV.'+lv;
     $('levelLabel').classList.toggle('maxed',lv===10);
@@ -1022,6 +1023,7 @@
   // Restore per-character progress from this browser only; camera works without it.
   loadGrowth();
   renderPet();
+  saying.textContent=currentPet().intro;
   look();
 })();
 </script>
