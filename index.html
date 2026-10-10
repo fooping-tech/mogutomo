@@ -435,6 +435,71 @@
   ];
   let selectedPet=0, petXP=[0,0,0,0,0,0], petBites=[0,0,0,0,0,0], secretUnlocked=false;
   let xpTimer=null, levelTimer=null;
+
+  const STAGES=[{id:'seed',name:'🥚 ちびっこ',start:1,scale:.60},{id:'child',name:'🌱 こども',start:3,scale:.77},{id:'young',name:'🌸 わかもの',start:5,scale:.93},{id:'grown',name:'🌟 おとな',start:7,scale:1.055},{id:'legend',name:'👑 でんせつ',start:10,scale:1.15}];
+  const stageFor=lv=>lv>=10?STAGES[4]:lv>=7?STAGES[3]:lv>=5?STAGES[2]:lv>=3?STAGES[1]:STAGES[0];
+  const voiceNames=['ぴるるっ','ぶも〜','にゃるる','こんっこんっ','ぴぴぴっ','きらりん'];
+  let evolveTimer=null,saveSucceeded=false,dexWasOpen=false;
+  function writeSaveStatus(message){const node=$('saveStatus');if(node)node.textContent=message;}
+  function showConfetti(count=22){
+    const field=$('confettiField');
+    field.replaceChildren();
+    if(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches)return;
+    const frag=document.createDocumentFragment(),colors=['#FFCC4D','#F7808A','#8CE7D5','#B69AFF','#FFB05F','#FFFFFF'];
+    for(let i=0;i<count;i++){
+      const piece=document.createElement('i');
+      piece.style.setProperty('--x',(5+Math.random()*90).toFixed(1)+'%');
+      piece.style.setProperty('--delay',(Math.random()*.48).toFixed(2)+'s');
+      piece.style.setProperty('--duration',(1+Math.random()*.9).toFixed(2)+'s');
+      piece.style.setProperty('--spin',(180+Math.random()*700).toFixed(0)+'deg');
+      piece.style.setProperty('--color',colors[i%colors.length]);
+      frag.appendChild(piece);
+    }
+    field.appendChild(frag);
+    setTimeout(()=>field.replaceChildren(),2400);
+  }
+  function animateEvolution(){
+    if(evolveTimer)clearTimeout(evolveTimer);
+    runAnimation(buddy,'evolving');
+    stage.classList.add('evolution-light');
+    showConfetti(32);
+    evolveTimer=setTimeout(()=>{
+      buddy.classList.remove('evolving');
+      stage.classList.remove('evolution-light');
+    },1880);
+  }
+  function selectPet(index,{closeDex=true}={}){
+    if(!Number.isInteger(index)||index<0||index>(secretUnlocked?5:4))return;
+    selectedPet=index;
+    if(munchTimeout)clearTimeout(munchTimeout);
+    if(happyTimeout)clearTimeout(happyTimeout);
+    if(evolveTimer)clearTimeout(evolveTimer);
+    buddy.classList.remove('is-munching','is-happy','evolving');
+    stage.classList.remove('evolution-light');
+    renderPet();
+    saying.textContent=currentPet().intro;
+    saveGrowth();
+    if(closeDex)hideDex();
+    void playSound('hello','voice');
+  }
+  function renderDex(){
+    $('dexGrid').innerHTML=PETS.map((pet,i)=>{
+      const locked=i===5&&!secretUnlocked,lv=levelFor(petXP[i]);
+      return '<button type="button" class="dex-pet'+(i===selectedPet&&!locked?' selected':'')+'" data-pet-index="'+i+'"'+(locked?' disabled':'')+
+        ' aria-label="'+(locked?'ひみつのこはまだロック中':pet.name+'、レベル'+lv+'へ移動')+'">'+
+        '<span class="dex-emoji">'+(locked?'❔':pet.emoji)+'</span><strong>'+(locked?'？？？':pet.name)+'</strong><small>'+
+        (locked?'5ひきMAXで解放':'Lv.'+lv+' ・ '+stageFor(lv).name)+'</small></button>';
+    }).join('');
+    $('dexProgress').textContent='✨ '+petXP.slice(0,5).filter(x=>levelFor(x)===10).length+' / 5 ひきが MAX ✨';
+  }
+  function showDex(){
+    renderDex();$('dexOverlay').hidden=false;dexWasOpen=true;$('closeDex').focus();
+  }
+  function hideDex(){
+    if(!dexWasOpen)return;
+    $('dexOverlay').hidden=true;dexWasOpen=false;$('openDex').focus();
+  }
+
   const levelFor= xp => {
     const amount=Math.max(0,Number(xp)||0);
     let idx=0;
@@ -443,8 +508,15 @@
   };
   const allBaseMax=()=>petXP.slice(0,5).every(x=>levelFor(x)===10);
   function saveGrowth(){
-    try{localStorage.setItem(SAVE_KEY,JSON.stringify({xp:petXP,bites:petBites,selected:selectedPet,meals:mealCount}));}
-    catch(e){console.info('Progress persistence unavailable',e);}
+    try{
+      localStorage.setItem(SAVE_KEY,JSON.stringify({xp:petXP,bites:petBites,selected:selectedPet,meals:mealCount}));
+      saveSucceeded=true;
+      writeSaveStatus('✅ このブラウザに保存済み ・ '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}));
+      return true;
+    }catch(e){
+      saveSucceeded=false;writeSaveStatus('⚠️ 保存できません。Safariの通常タブで開いてください。');
+      console.warn('Storage unavailable',e);return false;
+    }
   }
   function loadGrowth(){
     try{
@@ -455,15 +527,18 @@
       mealCount=clamp(Math.floor(Number(data.meals)||0),0,100000);
       secretUnlocked=allBaseMax();
       selectedPet=clamp(Math.floor(Number(data.selected)||0),0,secretUnlocked?5:4);
+      writeSaveStatus('✅ 保存したデータを読み込みました');
     }catch(e){console.warn('Could not restore progress',e);}
   }
   function currentPet(){return PETS[selectedPet];}
   function renderPet(){
-    const pet=currentPet(),lv=levelFor(petXP[selectedPet]);
+    const pet=currentPet(),lv=levelFor(petXP[selectedPet]),evo=stageFor(lv);
     const collectionCount=secretUnlocked?6:5;
     const palette=['--fur-start','--fur-end','--fur-border','--ear-inside','--belly-color','--cheek-color','--arm-color','--foot-color'];
     pet.colors.forEach((value,i)=>buddy.style.setProperty(palette[i],value));
-    buddy.style.setProperty('--growth',(1+(lv-1)*.017).toFixed(3));
+    buddy.style.setProperty('--growth',(evo.scale+(lv-evo.start)*.018).toFixed(3));
+    buddy.dataset.stage=evo.id;
+    $('evolutionStage').textContent=evo.name+' ・ '+voiceNames[selectedPet];
     buddy.dataset.species=pet.species;
     buddy.setAttribute('aria-label',pet.name+'。'+pet.kind+'、レベル'+lv+'。左右スワイプで切り替え');
     buddy.classList.toggle('is-grown',lv>=5);
@@ -484,7 +559,8 @@
     $('xpTrack').setAttribute('aria-valuenow',String(lv===10?1:value-floor));
     $('petCollection').innerHTML=PETS.slice(0,collectionCount).map((p,i)=>{
       const level=levelFor(petXP[i]);
-      return '<span class="collection-pet'+(i===selectedPet?' active':'')+(level===10?' max':'')+'"><strong>'+p.emoji+'</strong>'+(level===10?'MAX':'Lv.'+level)+'</span>';
+      return '<button type="button" data-pet-index="'+i+'" aria-label="'+p.name+'、レベル'+level+'に切り替える" class="collection-pet'+
+        (i===selectedPet?' active':'')+(level===10?' max':'')+'"><strong>'+p.emoji+'</strong>'+(level===10?'MAX':'Lv.'+level)+'</button>';
     }).join('');
     $('collectionHint').textContent=secretUnlocked?
       '🌟 ひみつのルミナが なかまになったよ！':
@@ -493,15 +569,7 @@
   }
   function switchPet(delta){
     const length=secretUnlocked?6:5;
-    selectedPet=(selectedPet+delta+length)%length;
-    if(munchTimeout)clearTimeout(munchTimeout);
-    if(happyTimeout)clearTimeout(happyTimeout);
-    buddy.classList.remove('is-munching','is-happy');
-    $('speciesMark').textContent='';
-    renderPet();
-    saying.textContent=currentPet().intro;
-    saveGrowth();
-    void playSound('hello','voice');
+    selectPet((selectedPet+delta+length)%length);
   }
   function runAnimation(el,className){
     el.classList.remove(className);
