@@ -64,6 +64,15 @@ python3 -m http.server 8000
 - 初回のモデル読み込みにはネット接続が必要です
 - MediaPipe 自体の利用状況メトリクスについては Google のプライバシー記述も確認してください
 
+## X・LINEなどのリンクプレビュー
+
+公開URL: https://fooping-tech.github.io/mogutomo/
+
+- `index.html` の先頭に Open Graph / X Card のメタ情報（`summary_large_image`）を設定しています
+- `og-image.png`（1200×630 px）を GitHub Pages のルートに置き、公開URLを `og:image` / `twitter:image` に指定しています
+- X はリンク先のメタ情報をキャッシュするため、変更後に古い投稿へすぐ反映されない場合があります。新しい投稿で `https://fooping-tech.github.io/mogutomo/?v=og1` を試してください
+- 公開反映後もプレビューが出ない場合は、画像URLがブラウザで表示できるか確認し、少し時間をおいて再試行してください
+
 ## ライセンス
 
 この試作アプリのソースコードはユーザーの自由な改変を想定しています。依存する MediaPipe Tasks Vision は Apache-2.0 ライセンスです。
