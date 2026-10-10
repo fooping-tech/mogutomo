@@ -20,7 +20,12 @@
     .logo {width:36px;height:36px;display:grid;place-items:center;background:#FFDD98;border:2px solid #F5C778;border-radius:12px;font-size:21px;transform:rotate(-8deg)}
     .icon-button {width:44px;height:44px;display:grid;place-items:center;border-radius:50%;border:1.5px solid #EEDCCC;background:#FFF9F0;color:var(--ink);font-size:23px;box-shadow:0 3px 0 #F1E2D0}
     .icon-button[aria-pressed="false"] {opacity:.6}
-    .sound-controls {display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .sound-controls {display:flex;align-items:center;gap:6px;flex-shrink:0}
+    .sound-controls .icon-button{width:40px;height:40px;font-size:20px}
+    .camera-error{margin:12px 3px 0;padding:12px;border:1px solid #E3A190;background:#FFF9F3;border-radius:12px;color:#70483B;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+    .camera-error[hidden]{display:none}
+    .camera-error summary{font-weight:800;cursor:pointer}
+    .camera-error code{font-family:ui-monospace,monospace;font-size:11px;white-space:pre-wrap}
     .buddy.is-happy {animation:happyhop .95s cubic-bezier(.22,.9,.3,1) 1}
     .buddy.is-happy .arm.left {animation:waveleft .65s ease-in-out 2}
     .buddy.is-happy .arm.right {animation:waveright .65s ease-in-out 2}
@@ -117,8 +122,9 @@
   <header class="topbar">
     <div class="brand"><span class="logo" aria-hidden="true">🍙</span><span>もぐとも</span></div>
     <div class="sound-controls" role="group" aria-label="音の設定">
-      <button id="voiceButton" type="button" class="icon-button" aria-label="声をオフにする" aria-pressed="true" title="声のオン・オフ">🔊</button>
+      <button id="voiceButton" type="button" class="icon-button" aria-label="鳴き声をオフにする" aria-pressed="true" title="鳴き声のオン・オフ">🔊</button>
       <button id="effectsButton" type="button" class="icon-button" aria-label="効果音をオフにする" aria-pressed="true" title="効果音のオン・オフ">🎵</button>
+      <button id="testSoundButton" type="button" class="icon-button" aria-label="鳴き声と効果音を試す" title="音をためす">🔉</button>
     </div>
   </header>
   <section class="intro" aria-label="アプリのタイトル">
@@ -164,6 +170,7 @@
     <div class="camera-label"><strong>カメラで みまもる</strong><span id="cameraDescription">おかおと おくちへのてのうごきを みるよ</span></div>
     <button type="button" class="camera-btn" id="cameraButton">カメラ ON</button>
   </section>
+  <details id="cameraError" class="camera-error" hidden><summary>カメラのエラー詳細</summary><code id="cameraErrorText"></code></details>
   <div class="bottom-meta">
     <label class="toggle-line"><input type="checkbox" id="autoPraise" checked><span>じどうで ほめる</span></label>
     <div id="biteCount" aria-live="polite">🌟 ぱくっ 0かい</div>
@@ -181,6 +188,7 @@
   const video = $('video'), buddy = $('buddy'), saying = $('saying'), statusText = $('statusText'), statusPill = $('statusPill');
   const stage = $('stage'), hearts = $('hearts');
   const cameraButton = $('cameraButton'), preview = $('preview'), voiceButton = $('voiceButton'), effectsButton = $('effectsButton'), toast = $('toast');
+  const cameraError = $('cameraError'), cameraErrorText = $('cameraErrorText');
   const clamp = (v,min,max) => Math.min(max,Math.max(min,v));
   const distance = (a,b,w=1,h=1) => Math.hypot((a.x-b.x)*w,(a.y-b.y)*h);
   const praiseWords = ['ぱくっ！すてき！✨','おいしそう！よかったね！','もぐもぐ できたね！👏','たべたね！うれしいな！','いっしょに たべると おいしいね！'];
@@ -189,87 +197,89 @@
   let requestId = 0, frameId = null, lastInference = 0, faceVisible = false, lastFaceTime = 0;
   let mealCount = 0, lastPraiseAt = -Infinity, lastInviteAt = performance.now(), lastActionAt = 0, munchTimeout=null, toastTimeout=null, happyTimeout=null;
   let waitingForHandToLeave = false, handEnteredAt = 0, handNearFrames = 0, mouthOpened = false;
-  let helloSaid = false, speechBusy = false, frameAvgMs=0;
+  let helloSaid = false, frameAvgMs=0;
 
-  // Generated sound effects: no audio files, network requests, or recordings.
-  // iOS Safari only permits audio after a user gesture, so unlock on touch/key input.
-  function unlockEffects(){
-    if(!effectsOn) return Promise.resolve();
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if(!AudioContextClass) return Promise.resolve();
-    try {
-      if(!audioContext) audioContext = new AudioContextClass();
-      if(audioContext.state === 'suspended') return audioContext.resume().catch(()=>{});
-    } catch(e) { console.warn('Sound effects unavailable',e); }
-    return Promise.resolve();
-  }
-  function playEffect(kind){
-    if(!effectsOn || !audioContext || audioContext.state !== 'running' || document.hidden) return;
-    const start = audioContext.currentTime + 0.012;
-    function tone(from,to,offset,duration,volume,type='sine'){
-      const oscillator = audioContext.createOscillator();
-      const envelope = audioContext.createGain();
-      const at = start + offset;
-      oscillator.type = type;
-      oscillator.frequency.setValueAtTime(from,at);
-      oscillator.frequency.exponentialRampToValueAtTime(to,at+duration*0.82);
-      envelope.gain.setValueAtTime(0.0001,at);
-      envelope.gain.exponentialRampToValueAtTime(volume,at+0.012);
-      envelope.gain.exponentialRampToValueAtTime(0.0001,at+duration);
-      oscillator.connect(envelope);
-      envelope.connect(audioContext.destination);
-      oscillator.start(at);
-      oscillator.stop(at+duration+0.015);
-      oscillator.onended=()=>{oscillator.disconnect();envelope.disconnect();};
-    }
-    try {
-      if(kind === 'munch'){
-        // A gentle cartoon "pop" followed by two quiet chewing sounds.
-        tone(480,230,0,0.11,0.085,'triangle');
-        tone(320,205,0.16,0.09,0.055);
-        tone(285,185,0.30,0.09,0.050);
-      } else if(kind === 'praise'){
-        // An ascending, short chime instead of a loud applause sound.
-        tone(523,587,0,0.15,0.058);
-        tone(659,740,0.12,0.16,0.065);
-        tone(784,880,0.25,0.17,0.063);
-        tone(1047,1175,0.39,0.27,0.075);
-      } else if(kind === 'enabled'){
-        tone(660,880,0,0.14,0.060);
+  // Everything is synthesized on-device, without speech voices or audio downloads.
+  // A user gesture unlocks audio on iPhone; retries also handle WebKit's interrupted state.
+  async function activateAudio(){
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx) return false;
+    try{
+      if(!audioContext||audioContext.state==='closed')audioContext=new Ctx();
+      if(audioContext.state!=='running'){
+        // An empty source helps older iOS Safari unlock Web Audio inside a trusted gesture.
+        const buffer=audioContext.createBuffer(1,1,audioContext.sampleRate);
+        const source=audioContext.createBufferSource();
+        source.buffer=buffer;
+        source.connect(audioContext.destination);
+        source.start(0);
+        await audioContext.resume();
+        source.onended=()=>source.disconnect();
       }
-    } catch(e){ console.warn('Sound effect failed',e); }
+      return audioContext.state==='running';
+    }catch(e){console.warn('Audio unavailable',e);return false;}
   }
-  document.addEventListener('pointerdown',()=>{void unlockEffects();},{passive:true});
-  document.addEventListener('keydown',()=>{void unlockEffects();});
-
-  function chooseCuteVoice(){
-    if (!('speechSynthesis' in window)) return null;
-    const voices = window.speechSynthesis.getVoices().filter(v => /^ja(-|$)/i.test(v.lang || ''));
-    if(!voices.length) return null;
-    const score = v => {
-      const name = `${v.name||''} ${v.voiceURI||''}`.toLowerCase();
-      let s = 0;
-      if (v.localService) s += 3;
-      if (/kyoko|haruka|sakura|female|woman|girl|japanesefemale/.test(name)) s += 6;
-      if (/otoya|male|man|boy/.test(name)) s -= 3;
-      if (/premium|enhanced|natural/.test(name)) s += 1;
-      return s;
-    };
-    return voices.sort((a,b)=>score(b)-score(a))[0] || voices[0];
+  function synthTone(from,to,offset,duration,volume,type='sine'){
+    const ctx=audioContext;
+    const at=ctx.currentTime+0.015+offset;
+    const osc=ctx.createOscillator(),gain=ctx.createGain();
+    osc.type=type;
+    osc.frequency.setValueAtTime(from,at);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(1,to),at+duration*.8);
+    gain.gain.setValueAtTime(.0001,at);
+    gain.gain.exponentialRampToValueAtTime(volume,at+Math.min(.018,duration*.25));
+    gain.gain.exponentialRampToValueAtTime(.0001,at+duration);
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.start(at);osc.stop(at+duration+.015);
+    osc.onended=()=>{osc.disconnect();gain.disconnect();};
   }
+  function scheduleSound(kind){
+    // Friendly synthetic creature chirps; no OS Japanese TTS is used.
+    switch(kind){
+      case 'hello':
+        synthTone(800,1250,0,.17,.17,'triangle');
+        synthTone(1100,920,.21,.20,.13,'sine');
+        break;
+      case 'eatVoice':
+        synthTone(760,970,0,.115,.15,'triangle');
+        synthTone(1020,740,.14,.15,.12,'triangle');
+        break;
+      case 'happyVoice':
+        synthTone(710,1030,0,.16,.16,'triangle');
+        synthTone(920,1360,.18,.20,.16,'sine');
+        synthTone(1280,1040,.40,.18,.12,'triangle');
+        break;
+      case 'munch':
+        synthTone(430,230,0,.105,.14,'triangle');
+        synthTone(315,210,.16,.085,.11);
+        synthTone(280,190,.29,.085,.10);
+        break;
+      case 'praise':
+        synthTone(523,610,0,.16,.11);
+        synthTone(659,740,.13,.17,.12);
+        synthTone(784,900,.27,.18,.12);
+        synthTone(1047,1175,.41,.26,.14);
+        break;
+      case 'enabled':
+        synthTone(660,910,0,.16,.15,'triangle');
+        break;
+    }
+  }
+  async function playSound(kind,channel){
+    if(channel==='voice'&&!soundOn || channel==='effects'&&!effectsOn || document.hidden) return;
+    const ready=await activateAudio();
+    if(!ready){if(channel==='voice'||channel==='effects') showToast('音が鳴りません。音量を上げ、Safariで「🔉」を押してみてね。');return;}
+    if(channel==='voice'&&!soundOn || channel==='effects'&&!effectsOn || document.hidden) return;
+    try{scheduleSound(kind);}catch(e){console.warn('Sound failed',e);}
+  }
+  function playEffect(kind){void playSound(kind,'effects');}
+  // Pointerdown unlock makes the first actual button tap work on Safari too.
+  document.addEventListener('pointerdown',()=>{if(soundOn||effectsOn)void activateAudio();},{passive:true});
+  document.addEventListener('touchstart',()=>{if(soundOn||effectsOn)void activateAudio();},{passive:true});
+  document.addEventListener('keydown',()=>{if(soundOn||effectsOn)void activateAudio();});
   function talk(text){
-    if (!soundOn || !('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text.replace(/[✨👏⭐🎉！]/g,''));
-      utterance.lang = 'ja-JP';
-      utterance.rate = 0.93;
-      utterance.pitch = 1.42;
-      utterance.volume = .95;
-      const voice = chooseCuteVoice();
-      if (voice) utterance.voice = voice;
-      window.speechSynthesis.speak(utterance);
-    } catch(e){ console.warn('Speech unavailable',e); }
+    const kind=/みーつけ|おはなし/.test(text)?'hello':/ぼくも|ぱくっ！おいしい/.test(text)?'eatVoice':'happyVoice';
+    void playSound(kind,'voice');
   }
   function say(text, speak=true){ saying.textContent=text; if(speak) talk(text); }
   function burstHearts(){
@@ -311,7 +321,7 @@
     buddy.classList.add('is-munching');
     munchTimeout=setTimeout(()=>buddy.classList.remove('is-munching'),1280);
     lastInviteAt=performance.now(); lastActionAt=lastInviteAt;
-    if(withSpeech) playEffect('munch');
+    playEffect('munch');
     say('ぼくも ぱくっ！おいしい〜！',withSpeech);
   }
   function sparkle(){
@@ -480,22 +490,25 @@
   $('eatTogether').addEventListener('click',()=>munch(true));
   voiceButton.addEventListener('click',()=>{
     soundOn=!soundOn; voiceButton.setAttribute('aria-pressed',String(soundOn));
-    voiceButton.setAttribute('aria-label',soundOn?'声をオフにする':'声をオンにする');
+    voiceButton.setAttribute('aria-label',soundOn?'鳴き声をオフにする':'鳴き声をオンにする');
     voiceButton.textContent=soundOn?'🔊':'🔇';
-    if(!soundOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
-    if(soundOn)talk('おはなし するね！');
+    if(soundOn) talk('おはなし するね！');
   });
   effectsButton.addEventListener('click',()=>{
     effectsOn=!effectsOn;
     effectsButton.setAttribute('aria-pressed',String(effectsOn));
     effectsButton.setAttribute('aria-label',effectsOn?'効果音をオフにする':'効果音をオンにする');
     effectsButton.textContent=effectsOn?'🎵':'🔕';
-    if(effectsOn) void unlockEffects().then(()=>playEffect('enabled'));
-    else if(audioContext?.state === 'running') void audioContext.suspend().catch(()=>{});
+    if(effectsOn) playEffect('enabled');
+  });
+  $('testSoundButton').addEventListener('click',()=>{
+    if(!soundOn&&!effectsOn){showToast('🔊と🎵をオンにしてね！');return;}
+    if(soundOn) void playSound('happyVoice','voice');
+    if(effectsOn) void playSound('praise','effects');
   });
   $('autoPraise').addEventListener('change',()=>{resetGesture();showToast($('autoPraise').checked?'じどうで ほめるよ！':'タップしたときだけ ほめるよ！');});
   document.addEventListener('visibilitychange',()=>{
-    if(document.hidden){if('speechSynthesis' in window)window.speechSynthesis.cancel();if(stream)stopCamera(false);}
+    if(document.hidden){if(stream)stopCamera(false);}
   });
   window.addEventListener('pagehide',()=>{if(stream)stopCamera(false);});
   // Manual mode works before camera access or while offline.
