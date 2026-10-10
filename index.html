@@ -217,6 +217,81 @@
     @keyframes xpPop{0%{opacity:0;transform:translate(-50%,-20%) scale(.55)}22%{opacity:1;transform:translate(-50%,-65%) scale(1.22)}85%{opacity:1;transform:translate(-50%,-125%) scale(1)}100%{opacity:0;transform:translate(-50%,-170%) scale(.95)}}
     @keyframes levelFlash{0%{opacity:0;transform:translate(-50%,-30%) scale(.5) rotate(-7deg)}23%,68%{opacity:1;transform:translate(-50%,-50%) scale(1.08) rotate(2deg)}100%{opacity:0;transform:translate(-50%,-70%) scale(1.2)}}
     @media (max-height:740px){.growth-card{padding:10px 12px 8px;margin-top:-10px;margin-bottom:9px}.pet-panel{margin:3px auto -3px}.xp-track{height:14px;margin:6px 0}.growth-collection{margin-top:5px}}
+
+    /* A real, four-stage evolution: hatchling → child → youngster → grown-up → legendary. */
+    #buddy{--growth:.62;--evo-eye-scale:1;transform-origin:50% 70%}
+    .buddy .evo-wing,.buddy .evo-tail,.buddy .evo-shell,.buddy .evo-cape{position:absolute;pointer-events:none}
+    .buddy .evo-tail{right:-10%;top:44%;width:23%;height:26%;z-index:0;background:var(--fur-end);border:4px solid var(--fur-border);border-radius:15% 85% 20% 80%;transform:rotate(36deg);opacity:0;transition:opacity .3s}
+    .buddy[data-species="fox"] .evo-tail{width:34%;height:40%;top:46%;border-radius:8% 85% 30% 90%;transform:rotate(35deg)}
+    .buddy[data-species="cat"] .evo-tail{width:15%;height:40%;top:37%;border-radius:65% 65% 35% 35%;transform:rotate(28deg)}
+    .buddy[data-species="chick"] .evo-tail{width:26%;height:19%;top:50%;border-radius:85% 25% 50% 0}
+    .buddy .evo-wing{z-index:3;left:-2%;top:57%;width:22%;height:25%;border-radius:70% 15% 80% 30%;background:var(--fur-start);border:3px solid var(--fur-border);opacity:0;transform:rotate(-35deg)}
+    .buddy .evo-cape{z-index:0;left:-11%;right:-11%;bottom:2%;height:64%;border-radius:15% 15% 55% 55%;background:linear-gradient(135deg,#FFE681,#C4ACFF);opacity:0;transform:scale(.7);transition:opacity .4s}
+    .buddy .evo-shell{z-index:5;left:16%;right:16%;bottom:6%;height:23%;border:4px solid var(--fur-border);background:var(--belly-color);border-radius:0 0 50% 50%;opacity:0;box-shadow:0 -6px 0 #FFFFFF99}
+    .buddy[data-stage="seed"] .ear{top:20%;height:22%;width:22%;border-width:3px;clip-path:none!important;border-radius:50%;transform:rotate(0deg)!important}
+    .buddy[data-stage="seed"] .ear.left{left:14%}.buddy[data-stage="seed"] .ear.right{right:14%}
+    .buddy[data-stage="seed"] .body{inset:23% 7% 8%;border-radius:50% 50% 45% 45%}
+    .buddy[data-stage="seed"] .belly{top:63%;height:24%;left:26%;width:48%;opacity:.7}
+    .buddy[data-stage="seed"] .eye{top:44%;width:21%;height:22%}
+    .buddy[data-stage="seed"] .eye.left{left:24%}.buddy[data-stage="seed"] .eye.right{right:24%}
+    .buddy[data-stage="seed"] .mouth{top:69%;transform:scale(.6)}
+    .buddy[data-stage="seed"] .cheek{top:69%;opacity:.4}
+    .buddy[data-stage="seed"] .arm{top:70%;width:17%;height:9%;border-width:3px}
+    .buddy[data-stage="seed"] .foot{bottom:5%;width:18%;height:10%}
+    .buddy[data-stage="seed"] .species-mark{display:none}
+    .buddy[data-stage="seed"] .evo-shell{opacity:1}
+    .buddy[data-stage="child"] .body{inset:17% 4% 2%;border-radius:50% 50% 43% 43%}
+    .buddy[data-stage="child"] .ear{height:35%;top:0%;border-width:3px;clip-path:none;border-radius:55% 55% 35% 35%}
+    .buddy[data-stage="child"] .species-mark{top:14%;font-size:15px}
+    .buddy[data-stage="child"] .eye{top:41%;width:19%;height:21%}
+    .buddy[data-stage="child"] .cheek{top:65%}
+    .buddy[data-stage="child"] .mouth{top:66%}
+    .buddy[data-stage="young"] .evo-tail{opacity:1}
+    .buddy[data-stage="young"] .species-mark{font-size:23px}
+    .buddy[data-stage="grown"] .evo-tail,.buddy[data-stage="legend"] .evo-tail{opacity:1}
+    .buddy[data-stage="grown"] .evo-wing,.buddy[data-stage="legend"] .evo-wing{opacity:1}
+    .buddy[data-stage="legend"] .evo-cape{opacity:.95;transform:scale(1)}
+    .buddy[data-stage="legend"] .species-mark{font-size:39px;top:-2%;animation:starCrown 2.1s ease-in-out infinite}
+    .buddy[data-stage="legend"] .body{box-shadow:inset 13px -13px 0 #FFFFFF33,0 0 24px #FFD98F99}
+    .buddy[data-species="bear"] .evo-wing{border-radius:50%}
+    .buddy[data-species="cat"] .evo-wing{background:var(--ear-inside);border-radius:50% 70% 20% 65%}
+    .buddy[data-species="fox"] .evo-wing{clip-path:polygon(0% 70%,80% 0%,100% 100%)}
+    .buddy[data-species="chick"] .evo-wing{width:33%;height:28%;border-radius:80% 20% 75% 30%;transform:rotate(-17deg)}
+    .buddy[data-species="secret"] .evo-wing{background:linear-gradient(130deg,#ECD6FF,#91E9FF);border-radius:100% 20%}
+    .buddy.evolving{animation:evolutionMorph 1.8s ease-in-out both!important}
+    .buddy.evolving .body{animation:evolutionGlow 1.8s ease-in-out both}
+    @keyframes evolutionMorph{0%{transform:translateY(5px) scale(.58) rotate(-7deg)}28%{transform:translateY(-15px) scale(.84) rotate(10deg)}57%{transform:translateY(-22px) scale(1.28) rotate(-7deg)}76%{transform:translateY(2px) scale(calc(var(--growth) * .93)) rotate(4deg)}100%{transform:translateY(0) scale(var(--growth)) rotate(0deg)}}
+    @keyframes evolutionGlow{20%,65%{filter:brightness(1.7) saturate(1.6)}100%{filter:none}}
+    .stage.evolution-light:before{animation:evoBackground 1.5s ease-in-out}
+    @keyframes evoBackground{15%,65%{background:#FFE2A2;filter:blur(4px) brightness(1.2)}100%{background:#FFE8C9}}
+    .evolution-caption{font-size:12px;font-weight:900;text-align:center;color:#AC7B5B;letter-spacing:.07em}
+    .growth-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;font-size:11px;color:#927668}
+    .grow-btn{border:1px solid #F0CBBA;background:#FFF1E8;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:900;color:#8B5B4B}
+    .collection-pet{cursor:pointer;font:inherit;touch-action:manipulation}
+    .collection-pet:focus-visible,.dex-pet:focus-visible{outline:3px solid #679CE9;outline-offset:2px}
+    .dex-overlay[hidden],.save-panel[hidden]{display:none!important}
+    .dex-overlay{position:fixed;inset:0;z-index:80;background:#33251F9C;padding:13px;overflow-y:auto;display:flex;align-items:center;justify-content:center}
+    .dex-card{width:min(100%,470px);max-height:94svh;overflow:auto;background:#FFF8EE;border:3px solid #F5CFB4;border-radius:25px;padding:17px;box-shadow:0 10px 55px #36231E50}
+    .dex-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .dex-title{font-size:22px;font-weight:1000;margin:0}
+    .dex-close{width:40px;height:40px;border:1px solid #E8C7AD;background:white;border-radius:50%;font-size:20px}
+    .dex-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:17px 0}
+    .dex-pet{border:2px solid #E8D7C5;background:white;border-radius:18px;padding:13px 8px;min-height:115px;text-align:center;color:#624B43}
+    .dex-pet.selected{border-color:#F17B74;background:#FFF1E8}
+    .dex-pet:disabled{opacity:.65;cursor:default}
+    .dex-pet .dex-emoji{display:block;font-size:35px}
+    .dex-pet strong{display:block;margin:5px 0 2px}
+    .dex-pet small{display:block;color:#91756A}
+    .save-panel{margin:11px 3px 0;padding:13px;background:#FFFDF9;border:1px solid #EAD8C7;border-radius:18px;font-size:12px;color:#796458}
+    .save-panel p{margin:0 0 9px}
+    .save-actions{display:flex;gap:8px;justify-content:flex-end}
+    .save-actions button{border:1px solid #DFC4B2;background:#FFF0E3;padding:8px 11px;border-radius:10px;font-size:12px;font-weight:900}
+    .save-actions .danger{color:#A74D50}
+    .save-status{margin-top:8px!important;font-size:11px;color:#877164}
+    .confetti-field{position:absolute;inset:0;overflow:hidden;z-index:27;pointer-events:none}
+    .confetti-field i{position:absolute;top:3%;left:var(--x);width:11px;height:19px;background:var(--color);border-radius:4px;opacity:0;animation:confettiFall var(--duration) ease-out var(--delay) both;transform:rotate(var(--spin))}
+    @keyframes confettiFall{0%{opacity:0;transform:translateY(-20px) rotate(0) scale(.6)}20%{opacity:1}95%{opacity:1}100%{opacity:0;transform:translateY(230px) rotate(var(--spin))}}
+    @media(prefers-reduced-motion:reduce){.confetti-field i{animation:none;opacity:0}.buddy.evolving,.buddy.evolving .body{animation:none!important}}
   </style>
 </head>
 <body>
@@ -243,7 +318,7 @@
     <div class="bubble" role="status" aria-live="polite"><p id="saying">いっしょに ごはん たべよ！</p></div>
     <div class="stage" id="stage">
       <span class="decor one" aria-hidden="true">✳</span><span class="decor two" aria-hidden="true">♥</span><span class="decor three" aria-hidden="true">✦</span>
-      <div class="stage-shadow" aria-hidden="true"></div><div id="xpPop" class="xp-pop" aria-hidden="true">+10 XP</div><div id="levelFlash" class="level-flash" aria-hidden="true">LEVEL UP!</div>
+      <div class="stage-shadow" aria-hidden="true"></div><div id="confettiField" class="confetti-field" aria-hidden="true"></div><div id="xpPop" class="xp-pop" aria-hidden="true">+10 XP</div><div id="levelFlash" class="level-flash" aria-hidden="true">LEVEL UP!</div>
       <div id="buddy" class="buddy" aria-label="目を動かす、ピンク色のもぐちゃん" role="img">
         <div class="ear left"></div><div class="ear right"></div><div class="species-mark" id="speciesMark" aria-hidden="true"></div>
         <div class="foot left"></div><div class="foot right"></div>
@@ -252,7 +327,7 @@
         <div class="eye left"><div class="eye-inner"><div class="shine"></div><div class="dot"></div></div><div class="eyelid"></div></div>
         <div class="eye right"><div class="eye-inner"><div class="shine"></div><div class="dot"></div></div><div class="eyelid"></div></div>
         <div class="cheek left"></div><div class="cheek right"></div>
-        <div class="mouth"></div><div class="food-emoji" aria-hidden="true">🥕</div>
+        <div class="mouth"></div><div class="evo-tail" aria-hidden="true"></div><div class="evo-wing" aria-hidden="true"></div><div class="evo-cape" aria-hidden="true"></div><div class="evo-shell" aria-hidden="true"></div><div class="food-emoji" aria-hidden="true">🥕</div>
       </div>
       <div class="preview" id="preview" aria-label="ライブカメラの検出状態">
         <video id="video" playsinline autoplay muted aria-label="カメラのプレビュー"></video>
@@ -276,9 +351,9 @@
   </section>
   <section class="growth-card" aria-label="キャラクターのレベルと経験値">
     <div class="growth-top"><span id="levelLabel" class="growth-level">LV.1</span><span id="xpLabel" class="growth-xp">0 / 10 XP</span></div>
-    <div class="xp-track" role="progressbar" id="xpTrack" aria-label="次のレベルまでの経験値" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><div class="xp-fill" id="xpFill"></div></div>
+    <div id="evolutionStage" class="evolution-caption">🥚 たまごっこ</div><div class="xp-track" role="progressbar" id="xpTrack" aria-label="次のレベルまでの経験値" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0"><div class="xp-fill" id="xpFill"></div></div>
     <div id="petCollection" class="growth-collection" aria-label="5体の育成状態"></div>
-    <p id="collectionHint">5ひき みんな LV.10で ひみつのこが…？ ✨</p>
+    <p id="collectionHint">5ひき みんな LV.10で ひみつのこが…？ ✨</p><div class="growth-toolbar"><span>アイコンをタップして きりかえ</span><button id="openDex" class="grow-btn" type="button">📖 ずかん</button></div>
   </section>
   <div class="status"><div id="statusPill" class="status-pill"><span class="status-dot"></span><span id="statusText">カメラをつけると めが あうよ 👀</span></div></div>
   <section class="controls" aria-label="ごはんの操作">
@@ -295,6 +370,19 @@
   <div class="bottom-meta">
     <label class="toggle-line"><input type="checkbox" id="autoPraise" checked><span>じどうで ほめる</span></label>
     <div id="biteCount" aria-live="polite">🌟 ぱくっ 0かい</div>
+  </div>
+  <section class="save-panel" id="savePanel" aria-label="育成データの保存とリセット">
+    <p><strong>💾 このブラウザに育成記録を保存</strong></p>
+    <div class="save-actions"><button id="saveNow" type="button">いま保存</button><button id="resetGrowth" type="button" class="danger">育成をリセット</button></div>
+    <p class="save-status" id="saveStatus" role="status" aria-live="polite">自動保存の状態を確認中…</p>
+  </section>
+  <div class="dex-overlay" id="dexOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="dexTitle">
+    <div class="dex-card">
+      <div class="dex-head"><h2 id="dexTitle" class="dex-title">📖 もぐとも ずかん</h2><button id="closeDex" type="button" class="dex-close" aria-label="図鑑を閉じる">✕</button></div>
+      <p>なかまをタップすると、その子の画面へ移動するよ。みんな少しずつ進化するよ！</p>
+      <div class="dex-grid" id="dexGrid"></div>
+      <p id="dexProgress" class="evolution-caption"></p>
+    </div>
   </div>
   <p class="privacy">📱 映像は端末内で解析し、録画・アップロードしません。<br>カメラは HTTPS のページで利用できます。最初はAIモデルの読み込みが必要です。</p>
   <div class="toast" id="toast" role="alert"></div>
