@@ -1210,7 +1210,7 @@
   }
 
   const detectionNames={
-    loading:'⏳ AIじゅんび中',search:'👀 かおをさがすよ',face:'🙂 あーんを まってるよ',
+    loading:'⏳ AIじゅんび中',search:'👀 かおをさがすよ',arming:'🙂 まず おくちを とじてね',face:'🙂 あーんを まってるよ',
     open:'😮 あーん！',closing:'😊 ぱくっと とじてね',cooldown:'✨ じゅんび中',
     bite:'✨ ぱくっ！',error:'⚠️ AIはおやすみ'
   };
@@ -1358,7 +1358,7 @@
         mouthBaseline=mouthBaseline===null?openness:mouthBaseline*.5+openness*.5;
         if(++mouthClosedFrames>=2){mouthPhase='ready';mouthClosedFrames=0;}
       }else{mouthClosedFrames=0;mouthBaseline=null;}
-      return openness>=MOUTH_OPEN_MIN?'open':'face';
+      return 'arming';
     }
     const baseline=mouthBaseline??.06;
     const openThreshold=Math.max(MOUTH_OPEN_MIN,baseline+MOUTH_OPEN_DELTA);
@@ -1540,9 +1540,8 @@
           look(clamp((.5-center.x)*2.3,-1,1),clamp((center.y-.48)*2.5,-1,1));
           const mouthState=observeMouth(face,now);
           drawDetection(face,mouthState);
-          detectionStatus(mouthState==='bite'?'bite':mouthState==='open'?'open':mouthState==='closing'?'closing':'face',
-                          true,mouthState==='open'||mouthState==='closing');
-        } else if(now-lastFaceTime>1100){
+          detectionStatus(mouthState,true,mouthState==='open'||mouthState==='closing');
+        } else if(now-lastFaceTime>1750){
           if(faceVisible){faceVisible=false;status('おかおを さがしてるよ 👀','busy');}
           resetGesture();look();
           drawDetection(null);
