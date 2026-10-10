@@ -36,7 +36,7 @@ function makeApp(memory=new Map(),opts={}){
       this.id=id;this.checked=true;this.disabled=false;
       this.hidden=['welcomeOverlay','settingsOverlay','dexOverlay','cameraSession','manualFallback'].includes(id);
       this.classList=new ClassList();this.dataset={};this.textContent='';this.innerHTML='';
-      this.value='60';this.style={width:'',setProperty(){}};
+      this.value='60';this.style={width:'',setProperty(name,value){this[name]=value;}};
       this.offsetWidth=260;this.clientWidth=190;this.clientHeight=230;
       this.videoWidth=640;this.videoHeight=480;this.childNodes=[];
     }
