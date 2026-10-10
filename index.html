@@ -181,7 +181,7 @@
 <script>
 (() => {
   'use strict';
-  const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22';
+  const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304';
   const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
   const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
   const $ = id => document.getElementById(id);
@@ -399,7 +399,7 @@
     try{return await import(`${CDN}/+esm`);}
     catch(primary){
       console.warn('Primary MediaPipe CDN unavailable',primary);
-      return await import('https://esm.sh/@mediapipe/tasks-vision@0.10.22?bundle');
+      return await import('https://esm.sh/@mediapipe/tasks-vision@0.10.22-rc.20250304?bundle');
     }
   }
   function cameraExplanation(error){
