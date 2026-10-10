@@ -850,6 +850,7 @@
   function animateEvolution(){
     if(evolveTimer)clearTimeout(evolveTimer);
     runAnimation(buddy,'evolving');
+    drawVoxelCharacter();
     stage.classList.add('evolution-light');
     showConfetti(32);flashScreen(true);
     evolveTimer=setTimeout(()=>{
@@ -929,6 +930,184 @@
     }catch(e){console.warn('Could not restore progress',e);}
   }
   function currentPet(){return PETS[selectedPet];}
+
+  /* Genuine 3D voxel blocks projected onto 2D Canvas (no WebGL required).
+     Every body piece is a cube with individually lit top/front/right faces. */
+  const voxelCanvas=$('voxelCanvas');
+  let voxelLookX=0,voxelLookY=0;
+  const VKEY=(x,y,z)=>x+','+y+','+z;
+  function buildVoxelPet(species,level){
+    const stageIndex=level>=10?4:level>=7?3:level>=6?2:level>=4?1:0;
+    const pet=PETS.find(p=>p.species===species)||PETS[0];
+    const [main,shadow,,inner,belly,cheek,,foot]=pet.colors;
+    const cells=new Map();
+    function add(x,y,z,color){cells.set(VKEY(x,y,z),{x,y,z,color});}
+    function slab(x1,x2,y1,y2,z1,z2,color){
+      for(let z=z1;z<=z2;z++)for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)add(x,y,z,color);
+    }
+    const extent=stageIndex===0?2:stageIndex===4?4:3;
+    const top=stageIndex===0?3:stageIndex===4?0:1;
+    const bottom=stageIndex===0?8:stageIndex===4?10:9;
+    const faceY=stageIndex===0?5:stageIndex===4?4:4;
+    const faceDepth=2;
+    for(let y=top;y<=bottom;y++){
+      const corner=(y===top||y===bottom)?1:0;
+      for(let x=-extent+corner;x<=extent-corner;x++){
+        for(let z=0;z<=1;z++){
+          const chest=y>=faceY+2&&Math.abs(x)<=1;
+          add(x,y,z,chest?belly:(z===0?shadow:main));
+        }
+      }
+    }
+    if(stageIndex>=1){
+      // Legs and hands become real separated voxel volumes.
+      slab(-extent+1,-extent+1,bottom+1,bottom+1,0,1,foot);
+      slab(extent-1,extent-1,bottom+1,bottom+1,0,1,foot);
+      slab(-extent-1,-extent,faceY+2,faceY+3,0,1,shadow);
+      slab(extent,extent+1,faceY+2,faceY+3,0,1,main);
+    }
+    if(stageIndex>=2){
+      // Larger species-specific accessories are unlocked through evolution.
+      if(species==='fox'||species==='cat')slab(extent+1,extent+2,faceY+1,faceY+3,0,0,shadow);
+      if(species==='chick')slab(-extent-1,-extent,faceY,faceY+2,1,2,inner);
+      if(species==='rabbit')slab(-extent-2,-extent-1,faceY+1,faceY+2,0,1,inner);
+      if(species==='bear')slab(-1,1,faceY+3,faceY+3,2,2,inner);
+      if(species==='secret')slab(-extent-2,extent+2,faceY+2,faceY+2,0,0,inner);
+    }
+    if(stageIndex>=3){
+      if(species==='cat'){
+        slab(-extent-1,-extent,faceY+1,faceY+1,2,2,inner);
+        slab(extent,extent+1,faceY+1,faceY+1,2,2,inner);
+      }
+      if(species==='fox')slab(extent+2,extent+3,faceY,faceY+2,0,0,belly);
+      if(species==='bear')slab(-extent,extent,bottom-1,bottom-1,2,2,inner);
+      if(species==='chick')slab(extent,extent+2,faceY+2,faceY+3,0,0,inner);
+    }
+    if(stageIndex===4){
+      // Legendary finish is geometry, not just an enlarged sprite.
+      slab(-2,2,top-2,top-2,0,1,'#FFE47A');
+      slab(-3,-3,top-3,top-1,1,1,'#FFDC66');
+      slab(3,3,top-3,top-1,1,1,'#FFDC66');
+      slab(0,0,top-4,top-3,1,1,'#FFF4AC');
+      if(species==='secret'){
+        slab(-extent-4,-extent-2,2,5,0,0,'#8BC9F4');
+        slab(extent+2,extent+4,2,5,0,0,'#B391F4');
+      }else{
+        add(-extent-2,faceY-2,0,'#FFF0A8');
+        add(extent+2,faceY-2,0,'#FFF0A8');
+      }
+    }
+    // An original silhouette for each species, growing in complexity.
+    if(species==='rabbit'){
+      const high=stageIndex===0?2:stageIndex===1?-1:-3;
+      for(const x of [-2,2])for(let y=high;y<=top;y++){
+        slab(x,x,y,y,0,1,main);
+        if(stageIndex>0&&y>high)add(x,y,2,inner);
+      }
+    }else if(species==='bear'){
+      for(const x of [-extent,extent])slab(x,x,top-1,top,0,1,shadow);
+      if(stageIndex>=2)for(const x of [-extent,extent])add(x,top-1,2,inner);
+    }else if(species==='cat'){
+      for(const side of [-1,1]){
+        const root=side*(extent-1);
+        slab(root,root,top-3,top-1,0,1,main);
+        slab(root+side,root+side,top-1,top,0,1,shadow);
+        if(stageIndex>=2)add(root,top-1,2,cheek);
+      }
+    }else if(species==='fox'){
+      for(const side of [-1,1]){
+        slab(side*(extent-1),side*(extent-1),top-4,top-1,0,1,main);
+        slab(side*extent,side*extent,top-2,top-1,0,1,inner);
+        if(stageIndex>=2)add(side*extent,top,2,belly);
+      }
+    }else if(species==='chick'){
+      slab(0,0,top-2,top-1,1,1,'#FFDCA0');
+      if(stageIndex>=2)slab(-1,1,top-1,top-1,0,1,inner);
+    }else if(species==='secret'){
+      for(const side of [-1,1]){
+        slab(side*2,side*2,top-4,top-1,0,1,inner);
+        if(stageIndex>=2)slab(side*(extent+1),side*(extent+2),top+1,top+3,0,0,'#9FDCF3');
+      }
+    }
+    // Distinct nose/muzzle geometry and blush, not painted onto a flat sheet.
+    for(const x of [-extent,extent])add(x,faceY+2,2,cheek);
+    if(species==='bear'){
+      slab(-1,1,faceY+1,faceY+2,2,2,belly);
+      add(0,faceY+1,3,'#543C56');
+    }else if(species==='fox'){
+      slab(-1,1,faceY+2,faceY+3,2,2,belly);
+      add(0,faceY+2,3,'#513F53');
+    }else if(species==='chick'){
+      slab(-1,1,faceY+2,faceY+2,2,2,'#FF9B4B');
+      add(0,faceY+3,2,'#E17E3F');
+    }else if(species==='secret'){
+      slab(-1,1,faceY+2,faceY+2,2,2,'#F4DDFE');
+      add(0,faceY+2,3,'#A762CB');
+    }else add(0,faceY+2,2,'#8A5965');
+    const eyeX=stageIndex===0?[-1,1]:[-2,2];
+    for(const x of eyeX)add(x,faceY,faceDepth,species==='secret'?'#55427D':'#443451');
+    if(stageIndex>=2){
+      // Pixel brows make every grown expression more readable.
+      add(eyeX[0],faceY-1,2,inner);add(eyeX[1],faceY-1,2,inner);
+    }
+    if(stageIndex>=3 && species==='rabbit'){
+      add(-extent,faceY+1,2,cheek);add(extent,faceY+1,2,cheek);
+    }
+    return {cells,stageIndex,faceY,eyeX,extent,unit:stageIndex===0?20:stageIndex===4?17:19};
+  }
+  function tintVoxel(hex,amount){
+    if(!/^#[0-9A-Fa-f]{6}$/.test(hex))return hex;
+    const n=parseInt(hex.slice(1),16);
+    const ch=v=>Math.round(Math.max(0,Math.min(255,v+(amount>0?(255-v):v)*amount)));
+    return 'rgb('+[ch(n>>16&255),ch(n>>8&255),ch(n&255)].join(',')+')';
+  }
+  function drawVoxelCharacter(){
+    const ctx=voxelCanvas?.getContext?.('2d');
+    // Some browsers, or isolated headless tests, may have no canvas surface.
+    if(!ctx||typeof ctx.moveTo!=='function')return false;
+    const lv=levelFor(petXP[selectedPet]);
+    const shape=buildVoxelPet(currentPet().species,lv);
+    const size=360,u=shape.unit,originY=stageFor(lv).id==='seed'?106:96;
+    ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,size,size);
+    const xy=(x,y,z)=>[Math.round(180+x*u+z*u*.38),Math.round(originY+y*u-z*u*.28)];
+    const poly=(points,color)=>{
+      ctx.fillStyle=color;ctx.beginPath();
+      ctx.moveTo(...points[0]);
+      for(let k=1;k<points.length;k++)ctx.lineTo(...points[k]);
+      ctx.closePath();ctx.fill();
+      ctx.strokeStyle='#4C405644';ctx.lineWidth=.8;ctx.stroke();
+    };
+    const all=shape.cells,has=(x,y,z)=>all.has(VKEY(x,y,z));
+    const blocks=[...all.values()].sort((a,b)=>a.z-b.z||a.y-b.y||a.x-b.x);
+    for(const {x,y,z,color} of blocks){
+      // Top and right faces are shaded individually; only exposed faces draw.
+      const a=xy(x,y,z),b=xy(x+1,y,z),c=xy(x+1,y+1,z),d=xy(x,y+1,z);
+      const af=xy(x,y,z+1),bf=xy(x+1,y,z+1),cf=xy(x+1,y+1,z+1),df=xy(x,y+1,z+1);
+      if(!has(x,y-1,z))poly([a,b,bf,af],tintVoxel(color,.22));
+      if(!has(x+1,y,z))poly([b,c,cf,bf],tintVoxel(color,-.24));
+      if(!has(x,y,z+1))poly([af,bf,cf,df],tintVoxel(color,0));
+    }
+    const engaged=buddy.classList.contains('is-happy')||buddy.classList.contains('tapped');
+    const chewing=buddy.classList.contains('is-munching');
+    for(const x of shape.eyeX){
+      const [px,py]=xy(x,shape.faceY,3);
+      ctx.fillStyle='#FFF9EE';
+      ctx.fillRect(Math.round(px+u*.15+voxelLookX*3),Math.round(py+u*.12+voxelLookY*2),Math.max(3,Math.round(u*.23)),Math.max(3,Math.round(u*.23)));
+      if(engaged){
+        ctx.fillStyle='#F9AAC2';
+        ctx.fillRect(px,py+u*.57,Math.round(u*.8),Math.round(u*.16));
+      }
+    }
+    if(chewing||engaged){
+      const [mx,my]=xy(0,shape.faceY+3,3);
+      ctx.fillStyle='#5C395D';
+      ctx.fillRect(mx+4,my+4,Math.round(u*.58),Math.round(u*.43));
+      ctx.fillStyle='#FD8EAB';
+      ctx.fillRect(mx+8,my+Math.round(u*.29),Math.round(u*.3),Math.round(u*.14));
+    }
+    return true;
+  }
+
   function renderPet(){
     const pet=currentPet(),lv=levelFor(petXP[selectedPet]),evo=stageFor(lv);
     stage.dataset.world=pet.species;
@@ -1229,10 +1408,12 @@
     stage?.querySelector('.stage-shadow')?.classList.remove('happy');
     void buddy.offsetWidth;
     buddy.classList.add('is-happy');
+    drawVoxelCharacter();
     stage?.querySelector('.stage-shadow')?.classList.add('happy');
     burstHearts();
     happyTimeout = setTimeout(()=>{
       buddy.classList.remove('is-happy');
+      drawVoxelCharacter();
       stage?.querySelector('.stage-shadow')?.classList.remove('happy');
     }, 980);
   }
@@ -1240,11 +1421,11 @@
     lastActionAt=performance.now();
     if(petTimer)clearTimeout(petTimer);
     buddy.classList.remove('tapped');void buddy.offsetWidth;
-    buddy.classList.add('tapped');
+    buddy.classList.add('tapped');drawVoxelCharacter();
     say(currentPet().name+'、なでなで うれしい！',false);
     void playSound('hello','voice');
     if(levelFor(petXP[selectedPet])>=5)sparkle();
-    petTimer=setTimeout(()=>buddy.classList.remove('tapped'),520);
+    petTimer=setTimeout(()=>{buddy.classList.remove('tapped');drawVoxelCharacter();},520);
   }
   function scheduleIdle(){
     if(idleTimer)clearTimeout(idleTimer);
@@ -1268,9 +1449,10 @@
     statusText.textContent=label; statusPill.className='status-pill'+(state?' '+state:'');
   }
   function look(x=0,y=0){
-    const width=buddy.getBoundingClientRect().width || 260;
-    buddy.style.setProperty('--look-x',`${(x*width*.039).toFixed(1)}px`);
-    buddy.style.setProperty('--look-y',`${(y*width*.03).toFixed(1)}px`);
+    const nextX=Math.round(x*3)/3,nextY=Math.round(y*3)/3;
+    if(Math.abs(nextX-voxelLookX)>.1||Math.abs(nextY-voxelLookY)>.1){
+      voxelLookX=nextX;voxelLookY=nextY;drawVoxelCharacter();
+    }
   }
 
   const detectionNames={
@@ -1346,8 +1528,8 @@
     if (munchTimeout) clearTimeout(munchTimeout);
     buddy.classList.remove('is-munching'); void buddy.offsetWidth;
     buddy.querySelector('.food-emoji').textContent=currentPet().food;
-    buddy.classList.add('is-munching');
-    munchTimeout=setTimeout(()=>buddy.classList.remove('is-munching'),1280);
+    buddy.classList.add('is-munching');drawVoxelCharacter();
+    munchTimeout=setTimeout(()=>{buddy.classList.remove('is-munching');drawVoxelCharacter();},1280);
     lastInviteAt=performance.now(); lastActionAt=lastInviteAt;
     playEffect('munch');
     say(currentPet().name+'も ぱくっ！',withSpeech);
