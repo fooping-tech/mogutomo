@@ -16,7 +16,7 @@ assert.ok(script.includes(marker),'Test-injection anchor still present');
 const source=script.replace(marker,[
   "  window.__testing={",
   "    getState:()=>({xp:[...petXP],events:[...achievements],selected:selectedPet,session:sessionBites,secret:secretUnlocked,volume,voice:soundOn,auto:$('autoPraise').checked}),",
-  "    observeMouth,stageFor,soundNotes,resetGesture,updateCameraLayout,snapToCameraFrame",
+  "    observeMouth,stageFor,soundNotes,resetGesture,updateCameraLayout,snapToCameraFrame,buildVoxelPet,drawVoxelCharacter,createSoundClip",
   "  };",
   marker
 ].join('\n'));
@@ -337,4 +337,55 @@ test('recognition meter and camera status expose rearm/open/closed stages',()=>{
   const states=['arming','face','open','closing','bite','cooldown'];
   for(const name of states)assert.match(html,new RegExp(name+':|'+name+'\\x27'),'status '+name);
   assert.doesNotMatch(html,/lastPraiseAt < 8500/);
+});
+
+test('six 3D voxel species have distinct geometry and evolving silhouettes',()=>{
+  const app=makeApp();app.click('startPlaying');
+  const species=['rabbit','bear','cat','fox','chick','secret'];
+  const shapes=[];
+  for(const sp of species){
+    const levels=[1,4,7,10].map(lv=>app.testing.buildVoxelPet(sp,lv));
+    assert.ok(levels.every(shape=>shape.cells.size>45),sp+' builds a real collection of cubes');
+    assert.ok(levels[3].cells.size>levels[0].cells.size,sp+' has significantly more geometry at final level');
+    assert.notEqual(levels[0].stageIndex,levels[3].stageIndex);
+    assert.ok(levels[0].unit>=levels[3].unit,'Larger characters fit in the viewport');
+    shapes.push([...levels[3].cells.keys()].sort().join('|'));
+  }
+  assert.equal(new Set(shapes).size,6,'All six silhouettes must be geometrically distinct');
+  assert.match(html,/\.voxel-canvas\{display:block/);
+  assert.doesNotMatch(html,/class="ear left"/);
+});
+
+test('voxel canvas renders shaded 3D cube faces and keeps XP and camera working',()=>{
+  const app=makeApp();
+  let filled=0,lines=0,shades=new Set();
+  const ctx={
+    imageSmoothingEnabled:true,clearRect(){},beginPath(){},moveTo(){},lineTo(){lines++;},
+    closePath(){},fill(){filled++;shades.add(this.fillStyle);},
+    stroke(){},fillRect(){filled++;shades.add(this.fillStyle);}
+  };
+  app.get('voxelCanvas').getContext=()=>ctx;
+  assert.equal(app.testing.drawVoxelCharacter(),true);
+  assert.ok(filled>50,'The baby is assembled from dozens of visible cube faces');
+  assert.ok(lines>50,'Cube geometry uses visible polygons');
+  assert.ok(shades.size>=5,'Different faces have different lighting/materials');
+  assert.equal(ctx.imageSmoothingEnabled,false,'Pixel-perfect rendering');
+  app.click('startPlaying');app.click('ateButton');
+  assert.equal(app.state().xp[0],10,'XP continues to work after drawing');
+  assert.ok(filled>100,'The voxel renderer is repainted on growth');
+});
+
+test('voxel game audio has original block textures and a valid PCM WAV',()=>{
+  const app=makeApp();app.click('startPlaying');
+  const notes=app.testing.soundNotes;
+  assert.equal(notes('munch')[0][5],'wood');
+  assert.equal(notes('praise')[0][5],'pluck');
+  assert.equal(notes('levelUp')[0][5],'chip');
+  assert.ok(notes('comboFever').length>notes('praise').length);
+  const types=Array.from({length:6},(_,i)=>notes('happyVoice',i)[0][5]);
+  assert.equal(new Set(types).size,6,'Every creature has its own timbre');
+  const wav=app.testing.createSoundClip('munch');
+  assert.match(wav,/blob:test-/,'Local generated sound is encoded as an audio Blob');
+  assert.match(html,/tag\(0,'RIFF'\)/);
+  assert.match(html,/signal=Math\.round\(signal\*/,'Waveforms are bit-crushed');
 });
