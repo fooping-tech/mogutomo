@@ -798,7 +798,7 @@
     }
     if(after===10){
       recordEvent('max_'+idx);
-      showScreenBadge('👑 '+PETS[idx].name+' MAX!');
+      if(!unlocked)showScreenBadge('👑 '+PETS[idx].name+' MAX!');
       showConfetti(44);
       if(petXP.slice(0,5).every(x=>levelFor(x)===10)){
         recordEvent('collection_complete');
@@ -1144,9 +1144,14 @@
     resetGesture();
     const result=rewardBite();
     const milestone=comboAfterBite();
+    if(result.unlocked){
+      showConfetti(60);showScreenBadge('🌈 SECRET UNLOCK!');
+    }else if(result.leveled && result.level===10){
+      showConfetti(44);showScreenBadge('👑 '+currentPet().name+' MAX!');
+    }
     const rare=(petBites[selectedPet] + selectedPet*7)%13===0;
     if(mealCount===1)recordEvent('first_bite');
-    if(rare){
+    if(rare&&!result.unlocked&&!result.leveled){
       showScreenBadge('✨ ひみつのリアクション！');
       recordEvent('rare_reaction_'+selectedPet);
       showConfetti(24);
