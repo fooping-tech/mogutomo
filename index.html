@@ -596,8 +596,8 @@
   let selectedPet=0, petXP=[0,0,0,0,0,0], petBites=[0,0,0,0,0,0], secretUnlocked=false;
   let xpTimer=null, levelTimer=null;
 
-  const STAGES=[{id:'seed',name:'🥚 ちびっこ',start:1,scale:.60},{id:'child',name:'🌱 こども',start:3,scale:.77},{id:'young',name:'🌸 わかもの',start:5,scale:.93},{id:'grown',name:'🌟 おとな',start:7,scale:1.055},{id:'legend',name:'👑 でんせつ',start:10,scale:1.15}];
-  const stageFor=lv=>lv>=10?STAGES[4]:lv>=7?STAGES[3]:lv>=5?STAGES[2]:lv>=3?STAGES[1]:STAGES[0];
+  const STAGES=[{id:'seed',name:'🥚 ちびっこ',start:1,scale:.60},{id:'child',name:'🌱 こども',start:4,scale:.83},{id:'young',name:'🌸 わかもの',start:6,scale:.96},{id:'grown',name:'🌟 おとな',start:7,scale:1.055},{id:'legend',name:'👑 でんせつ',start:10,scale:1.15}];
+  const stageFor=lv=>lv>=10?STAGES[4]:lv>=7?STAGES[3]:lv>=6?STAGES[2]:lv>=4?STAGES[1]:STAGES[0];
   const voiceNames=['ぴるるっ','ぶも〜','にゃるる','こんっこんっ','ぴぴぴっ','きらりん'];
   let evolveTimer=null,saveSucceeded=false,dexWasOpen=false;
   function writeSaveStatus(message){const node=$('saveStatus');if(node)node.textContent=message;}
@@ -670,7 +670,7 @@
   const allBaseMax=()=>petXP.slice(0,5).every(x=>levelFor(x)===10);
   function saveGrowth(){
     try{
-      localStorage.setItem(SAVE_KEY,JSON.stringify({xp:petXP,bites:petBites,selected:selectedPet,meals:mealCount}));
+      localStorage.setItem(SAVE_KEY,JSON.stringify({xp:petXP,bites:petBites,selected:selectedPet,meals:mealCount,settings:{voice:soundOn,effects:effectsOn,auto:$('autoPraise').checked,volume},achievements}));
       saveSucceeded=true;
       writeSaveStatus('✅ このブラウザに保存済み ・ '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}));
       return true;
@@ -688,6 +688,15 @@
       mealCount=clamp(Math.floor(Number(data.meals)||0),0,100000);
       secretUnlocked=allBaseMax();
       selectedPet=clamp(Math.floor(Number(data.selected)||0),0,secretUnlocked?5:4);
+      if(data.settings&&typeof data.settings==='object'){
+        if(typeof data.settings.voice==='boolean')soundOn=data.settings.voice;
+        if(typeof data.settings.effects==='boolean')effectsOn=data.settings.effects;
+        if(typeof data.settings.auto==='boolean')$('autoPraise').checked=data.settings.auto;
+        if(Number.isFinite(Number(data.settings.volume)))volume=clamp(Number(data.settings.volume),0,1);
+      }
+      if(Array.isArray(data.achievements))
+        achievements=data.achievements.filter(x=>typeof x==='string'&&x.length<60).slice(-300);
+      renderSettings();
       writeSaveStatus('✅ 保存したデータを読み込みました');
     }catch(e){console.warn('Could not restore progress',e);}
   }
@@ -716,7 +725,7 @@
     const step=ceil-floor||1, progressed=lv===10?100:clamp((value-floor)/step*100,0,100);
     $('xpLabel').textContent=lv===10?'カンスト！':(value-floor)+' / '+step+' XP';
     $('xpFill').style.width=progressed+'%';
-    const nextStageLevel=lv<4?4:lv<7?7:10;
+    const nextStageLevel=lv<4?4:lv<6?6:lv<7?7:10;
     const nextStageXP=LEVEL_STEPS[nextStageLevel-1];
     const remaining=Math.max(0,nextStageXP-petXP[selectedPet]);
     const approaching=lv<10&&remaining<=20;
@@ -764,19 +773,26 @@
       xpTimer=setTimeout(()=>$('xpPop').classList.remove('show'),1050);
     }
     if(unlocked){
+      recordEvent('secret_unlocked');
       selectedPet=5;renderPet();saveGrowth();
       saying.textContent='✨ ひみつのルミナが あらわれた！';
       $('levelFlash').textContent='🌈 ひみつのこ 登場！';
       runAnimation($('levelFlash'),'show');
       animateEvolution();
     }else if(evolved){
+      recordEvent('evolution_'+idx+'_'+after);
       $('levelFlash').textContent='🌟 しんか！\n'+stageFor(after).name+'！';
       runAnimation($('levelFlash'),'show');
       animateEvolution();
     }else if(leveled){
+      recordEvent('level_'+idx+'_'+after);
       $('levelFlash').textContent='✨ LEVEL UP!\nLV.'+after+' ✨';
       runAnimation($('levelFlash'),'show');
       showConfetti(16);
+    }
+    if(after===10){
+      recordEvent('max_'+idx);
+      if(petXP.slice(0,5).every(x=>levelFor(x)===10))recordEvent('collection_complete');
     }
     if(unlocked||leveled){
       if(levelTimer)clearTimeout(levelTimer);
@@ -810,12 +826,17 @@
     munch:[[0,.12,430,230,.52,'triangle'],[.17,.10,315,210,.43,'sine'],[.30,.09,280,190,.40,'sine']],
     praise:[[0,.16,523,610,.45,'sine'],[.13,.18,659,740,.46,'sine'],[.27,.18,784,900,.46,'sine'],[.41,.27,1047,1175,.50,'sine']],
     levelUp:[[0,.13,523,700,.52,'triangle'],[.12,.16,659,850,.50,'sine'],[.28,.16,830,1080,.52,'triangle'],[.43,.38,1047,1396,.56,'sine']],
+    comboNice:[[0,.105,700,920,.43,'chirp'],[.15,.13,960,1110,.37,'bell']],
+    comboGreat:[[0,.10,720,950,.43,'chirp'],[.12,.13,925,1200,.40,'bell'],[.27,.19,1175,1320,.38,'bell']],
+    comboFever:[[0,.12,660,900,.45,'bell'],[.16,.13,840,1130,.47,'chirp'],[.32,.16,1080,1350,.44,'bell'],[.51,.25,1250,1590,.46,'bell']],
     evolve:[[0,.10,580,740,.55,'chirp'],[.12,.14,690,920,.56,'bell'],[.30,.18,790,1190,.56,'bell'],[.52,.54,1020,1570,.52,'bell']],
     secret:[[0,.20,450,690,.5,'sine'],[.16,.2,600,860,.54,'triangle'],[.35,.23,880,1170,.54,'sine'],[.55,.42,1080,1620,.55,'triangle']],
     enabled:[[0,.15,660,910,.62,'triangle']]
   };
   function soundNotes(kind,index=selectedPet){
-    if(kind==='hello'||kind==='eatVoice'||kind==='happyVoice')return creatureNotes(kind,index);
+    if(['hello','eatVoice','happyVoice'].includes(kind))return creatureNotes(kind,index);
+    if(kind==='idleVoice')return creatureNotes('hello',index).map(n=>[n[0]*1.25,n[1]*.68,n[2]*.78,n[3]*.73,n[4]*.45,n[5]]);
+    if(kind==='rareVoice')return creatureNotes('happyVoice',index).map(n=>[n[0]*1.1,n[1]*1.1,n[2]*1.14,n[3]*1.13,n[4]*.75,n[5]]);
     return EFFECT_NOTES[kind]||EFFECT_NOTES.enabled;
   }
 
@@ -855,7 +876,7 @@
   }
   function scheduleSound(kind,index=selectedPet){
     for(const [offset,duration,from,to,volume,wave] of soundNotes(kind,index)){
-      synthTone(from,to,offset,duration,Math.min(.2,volume*.32),wave);
+      synthTone(from,to,offset,duration,Math.min(.2,volume*.32)*volume,wave);
     }
   }
   // HTMLAudioElement plays through the media audio path on iPhone.
@@ -864,7 +885,7 @@
   const mediaClips = {};
   function setAudioStatus(message){ $('audioStatus').textContent=message; }
   function createSoundClip(kind,index=selectedPet){
-    const cacheKey=(kind==='hello'||kind==='eatVoice'||kind==='happyVoice')?kind+':'+index+':'+stageFor(levelFor(petXP[index])).id:kind;
+    const cacheKey=(['hello','eatVoice','happyVoice','idleVoice','rareVoice'].includes(kind))?kind+':'+index+':'+stageFor(levelFor(petXP[index])).id:kind;
     if(mediaClips[cacheKey])return mediaClips[cacheKey];
     if(typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)throw Error('WAV Blob URL unavailable');
     const notes=soundNotes(kind,index);
@@ -936,7 +957,7 @@
       }
       player.pause();
       player.src=createSoundClip(kind);
-      player.volume=1;
+      player.volume=volume;
       setAudioStatus('🔉 音を再生中。聞こえないときは音量と消音モードを確認してね。');
       const result=player.play();
       if(result&&typeof result.catch==='function'){
